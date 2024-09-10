@@ -1,0 +1,12 @@
+{
+  "extends": "@tsconfig/node20/tsconfig.json",
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"]
+  },
+  "filesGlob": ["./src/**/*.ts"],
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "japanese-addresses-v2",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "全国の町丁目、大字、小字レベルの住所データ（277,543件）をオープンデータとして公開いたします。",
+  "main": "index.js",
+  "scripts": {
+    "test": "glob -c \"node --test --import tsx\" \"./src/**/*.test.ts\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@tsconfig/node20": "^20.1.4",
+    "@types/node": "^20.16.5",
+    "@types/proj4": "^2.5.5",
+    "@types/unzipper": "^0.10.10",
+    "glob": "^11.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "csv-parse": "^5.5.6",
+    "proj4": "^2.12.1",
+    "undici": "^6.19.8",
+    "unzipper": "^0.12.3"
+  }
+}
