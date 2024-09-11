@@ -1,10 +1,10 @@
 import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
+import { Duplex, PassThrough, Readable, Transform } from 'node:stream';
 
-import unzipper from 'unzipper';
 import { parse as csvParse } from 'csv-parse';
 
 import { fetch } from 'undici';
+import { unzipAndExtractZipFile } from './zip_tools.js';
 
 const CKAN_BASE_REGISTRY_URL = `https://catalog.registries.digital.go.jp/rc`
 const USER_AGENT = 'curl/8.7.1';
@@ -61,13 +61,28 @@ export async function ckanPackageSearch(query: string): Promise<CKANPackageSearc
   return json.result.results;
 }
 
+export async function getCkanPackageById(id: string): Promise<CKANPackageSearchResult> {
+  const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_show`);
+  url.searchParams.set('id', id);
+  const res = await fetch(url.toString(), {
+    headers: {
+      'User-Agent': USER_AGENT,
+    },
+  });
+  const json = await res.json() as CKANResponse<CKANPackageSearchResult>;
+  if (!json.success) {
+    throw new Error('CKAN API returned an error: ' + JSON.stringify(json));
+  }
+  return json.result;
+}
+
 export function getUrlForCSVResource(res: CKANPackageSearchResult): string | undefined {
   return res.resources.find((resource) => resource.format.startsWith('CSV'))?.url;
 }
 
-export type CSVParserIterator = AsyncIterableIterator<{[key: string]: string}>;
+export type CSVParserIterator<T> = AsyncIterableIterator<T>;
 
-export async function *downloadAndExtract(url: string): CSVParserIterator {
+export async function *downloadAndExtract(url: string): CSVParserIterator<Record<string, string>> {
   const res = await fetch(url, {
     headers: {
       'User-Agent': USER_AGENT,
@@ -78,30 +93,34 @@ export async function *downloadAndExtract(url: string): CSVParserIterator {
     throw new Error('No body');
   }
 
-  const parser = csvParse();
-
-  const promise = pipeline(
-    Readable.fromWeb(body),
-    unzipper.ParseOne(),
-    parser,
-  );
-
-  let header: string[] | undefined = undefined;
-  for await (const r of parser) {
-    const record = r as string[];
-    // save header
-    if (typeof header === 'undefined') {
-      header = record as string[];
-      continue;
+  const bodyStream = Readable.fromWeb(body);
+  const fileEntries = unzipAndExtractZipFile(bodyStream);
+  for await (const entry of fileEntries) {
+    const csvParser = entry.pipe(csvParse());
+    let header: string[] | undefined = undefined;
+    for await (const r of csvParser) {
+      const record = r as string[];
+      // save header
+      if (typeof header === 'undefined') {
+        header = record as string[];
+        continue;
+      }
+      yield record.reduce<Record<string, string>>((acc, value, index) => {
+        acc[header![index]] = value;
+        return acc;
+      }, {});
     }
-    yield record.reduce<{[key: string]: string}>((acc, value, index) => {
-      acc[header![index]] = value;
-      return acc;
-    }, {});
+  }
+}
+
+export async function getAndParseCSVDataForId<T = Record<string, string>>(id: string): Promise<T[]> {
+  const res = await getCkanPackageById(id);
+  const url = getUrlForCSVResource(res);
+  if (!url) {
+    throw new Error('No CSV resource found');
   }
 
-  await promise;
-  return;
+  return Array.fromAsync(downloadAndExtract(url)) as Promise<T[]>;
 }
 
 export function findResultByDataType(results: CKANPackageSearchResult[], dataType: string): CKANPackageSearchResult | undefined {

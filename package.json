@@ -5,14 +5,17 @@
   "description": "全国の町丁目、大字、小字レベルの住所データ（277,543件）をオープンデータとして公開いたします。",
   "main": "index.js",
   "scripts": {
+    "run:00_make_prefecture": "tsx ./src/00_make_prefecture.ts",
+    "run:01_make_city": "tsx ./src/01_make_city.ts",
+    "run:02_make_machi_aza": "tsx ./src/02_make_machi_aza.ts",
     "test": "glob -c \"node --test --import tsx\" \"./src/**/*.test.ts\""
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@tsconfig/node20": "^20.1.4",
-    "@types/node": "^20.16.5",
+    "@tsconfig/node22": "^22.0.0",
+    "@types/node": "^22.5.4",
     "@types/proj4": "^2.5.5",
     "@types/unzipper": "^0.10.10",
     "glob": "^11.0.0",
