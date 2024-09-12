@@ -100,7 +100,9 @@ export async function *downloadAndExtract<T>(url: string): CSVParserIterator<T> 
   const bodyStream = Readable.fromWeb(body);
   const fileEntries = unzipAndExtractZipFile(bodyStream);
   for await (const entry of fileEntries) {
-    const csvParser = entry.pipe(csvParse());
+    const csvParser = entry.pipe(csvParse({
+      quote: false,
+    }));
     let header: string[] | undefined = undefined;
     for await (const r of csvParser) {
       const record = r as string[];
