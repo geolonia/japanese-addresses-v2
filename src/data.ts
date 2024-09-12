@@ -9,7 +9,13 @@ export type SinglePrefecture = {
 
   /// 代表点 (県庁の位置)
   point: LngLat;
+
+  cities: SingleCity[];
 };
+
+/**
+ * @file api/ja.json
+ */
 export type PrefectureApi = SinglePrefecture[];
 
 export type SingleCity = {
@@ -25,6 +31,9 @@ export type SingleCity = {
   /// 代表点 (自治体役場の位置)
   point: LngLat;
 };
+/**
+ * @file api/ja/{都道府県名}.json
+ */
 export type CityApi = SingleCity[];
 
 export type SingleMachiAza = {
@@ -44,4 +53,33 @@ export type SingleMachiAza = {
   /// 代表点
   point?: LngLat;
 };
+/**
+ * @file api/ja/{都道府県名}/{市区町村名}.json
+ */
 export type MachiAzaApi = SingleMachiAza[];
+
+export type SingleRsdt = {
+  /// 街区符号
+  blk_num?: string;
+  /// 住居番号
+  rsdt_num: string;
+  /// 住居番号2
+  rsdt_num2?: string;
+
+  /// 代表点
+  point?: LngLat;
+};
+export type RsdtApi = SingleRsdt[];
+
+export type SingleChiban = {
+  /// 地番1
+  prc_num1: string;
+  /// 地番2
+  prc_num2?: string;
+  /// 地番3
+  prc_num3?: string;
+
+  /// 代表点
+  point?: LngLat;
+};
+export type ChibanApi = SingleChiban[];

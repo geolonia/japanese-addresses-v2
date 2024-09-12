@@ -9,7 +9,7 @@ import { projectABRData } from './lib/proj.js';
 import { MachiAzaData, MachiAzaPosData, mergeMachiAzaData } from './lib/ckan_data/machi_aza.js';
 
 async function outputMachiAzaData(outDir: string, prefName: string, cityName: string, apiData: MachiAzaApi) {
-  const outFile = path.join(outDir, prefName, `${cityName}.json`);
+  const outFile = path.join(outDir, 'ja', prefName, `${cityName}.json`);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, JSON.stringify(apiData, null, 2));
   console.log(`${prefName.padEnd(4, '　')} ${cityName.padEnd(10, '　')}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字を出力した`);
