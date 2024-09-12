@@ -16,11 +16,14 @@ test.describe('ckan', async () => {
 
   test.describe('downloadAndExtract', () => {
     test('should download, unzip, and parse the CSV file', async () => {
-      const res = ckan.downloadAndExtract('https://catalog.registries.digital.go.jp/rsc/address/mt_town_city372013.csv.zip');
+      const res = ckan.downloadAndExtract<Record<string, string>>('https://catalog.registries.digital.go.jp/rsc/address/mt_town_city372013.csv.zip');
+      let count = 0;
       for await (const row of res) {
+        count += 1;
         // make sure all rows are parsed, and the header row is not in the results
         assert.strictEqual(row['lg_code'], '372013');
       }
+      assert.ok(count > 0);
     });
   });
 });

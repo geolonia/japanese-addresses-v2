@@ -64,11 +64,13 @@ export async function ckanPackageSearch(query: string): Promise<CKANPackageSearc
 export async function getCkanPackageById(id: string): Promise<CKANPackageSearchResult> {
   const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_show`);
   url.searchParams.set('id', id);
+  // console.log(`Start ${url.toString()}`);
   const res = await fetch(url.toString(), {
     headers: {
       'User-Agent': USER_AGENT,
     },
   });
+  // console.log(`Status code: ${res.status} ${res.statusText} for ${url.toString()}`);
   const json = await res.json() as CKANResponse<CKANPackageSearchResult>;
   if (!json.success) {
     throw new Error('CKAN API returned an error: ' + JSON.stringify(json));
@@ -82,12 +84,14 @@ export function getUrlForCSVResource(res: CKANPackageSearchResult): string | und
 
 export type CSVParserIterator<T> = AsyncIterableIterator<T>;
 
-export async function *downloadAndExtract(url: string): CSVParserIterator<Record<string, string>> {
+export async function *downloadAndExtract<T>(url: string): CSVParserIterator<T> {
+  // console.log(`Start ${url}`);
   const res = await fetch(url, {
     headers: {
       'User-Agent': USER_AGENT,
     },
   });
+  // console.log(`Status code: ${res.status} ${res.statusText} for ${url}`);
   const body = res.body;
   if (!body) {
     throw new Error('No body');
@@ -108,19 +112,22 @@ export async function *downloadAndExtract(url: string): CSVParserIterator<Record
       yield record.reduce<Record<string, string>>((acc, value, index) => {
         acc[header![index]] = value;
         return acc;
-      }, {});
+      }, {}) as T;
     }
   }
 }
 
-export async function getAndParseCSVDataForId<T = Record<string, string>>(id: string): Promise<T[]> {
+export async function *getAndStreamCSVDataForId<T = Record<string, string>>(id: string): CSVParserIterator<T> {
   const res = await getCkanPackageById(id);
   const url = getUrlForCSVResource(res);
   if (!url) {
     throw new Error('No CSV resource found');
   }
+  yield *downloadAndExtract(url);
+}
 
-  return Array.fromAsync(downloadAndExtract(url)) as Promise<T[]>;
+export async function getAndParseCSVDataForId<T = Record<string, string>>(id: string): Promise<T[]> {
+  return Array.fromAsync(getAndStreamCSVDataForId<T>(id));
 }
 
 export function findResultByDataType(results: CKANPackageSearchResult[], dataType: string): CKANPackageSearchResult | undefined {

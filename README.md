@@ -185,10 +185,8 @@ type LngLat = [number, number];
   /// 小字名
   koaza?: string;
 
-  /// 住居表示住所の情報の存在
-  rsdt: boolean;
-  /// 地番の情報の存在
-  chiban: boolean;
+  /// 住居表示住所の情報の存在。値が存在しない場合は、住居表示住所の情報は存在しません。
+  rsdt?: true;
 
   /// 代表点
   point?: LngLat;

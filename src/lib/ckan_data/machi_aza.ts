@@ -1,3 +1,5 @@
+import { joinAsyncIterators } from "../stream_tools.js";
+
 export type MachiAzaData = {
   /// 全国地方公共団体コード
   lg_code: string;
@@ -116,17 +118,13 @@ export type MachiAzaPosData = {
   cns_bnd_year: string;
 };
 
-export type MachiAzaDataWithPos = MachiAzaData & MachiAzaPosData;
+export type MachiAzaDataWithPos = MachiAzaData | MachiAzaData & MachiAzaPosData;
 
-export function mergeMachiAzaData(machiAzaData: MachiAzaData[], machiAzaPosData: MachiAzaPosData[]): MachiAzaDataWithPos[] {
-  const out: MachiAzaDataWithPos[] = [];
-  for (const machiAza of machiAzaData) {
-    const pos = machiAzaPosData.find((pos) => (
-      pos.lg_code === machiAza.lg_code && pos.machiaza_id === machiAza.machiaza_id
-    ));
-    if (pos) {
-      out.push({ ...machiAza, ...pos });
-    }
-  }
-  return out;
+export function mergeMachiAzaData(
+  machiAzaData: AsyncIterableIterator<MachiAzaData>,
+  machiAzaPosData: AsyncIterableIterator<MachiAzaPosData>
+): AsyncIterableIterator<MachiAzaDataWithPos> {
+  return joinAsyncIterators(machiAzaData, machiAzaPosData, (machiAza, pos) => (
+    machiAza.lg_code === pos.lg_code && machiAza.machiaza_id === pos.machiaza_id
+  ), "lg_code");
 }
