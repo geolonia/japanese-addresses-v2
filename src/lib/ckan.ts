@@ -1,5 +1,6 @@
-import { pipeline } from 'node:stream/promises';
-import { Duplex, PassThrough, Readable, Transform } from 'node:stream';
+import { Readable } from 'node:stream';
+import path from 'node:path';
+import fs from 'node:fs';
 
 import { parse as csvParse } from 'csv-parse';
 
@@ -8,6 +9,7 @@ import { unzipAndExtractZipFile } from './zip_tools.js';
 
 const CKAN_BASE_REGISTRY_URL = `https://catalog.registries.digital.go.jp/rc`
 const USER_AGENT = 'curl/8.7.1';
+const CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
 
 export type CKANResponse<T = any> = {
   success: false
@@ -64,13 +66,11 @@ export async function ckanPackageSearch(query: string): Promise<CKANPackageSearc
 export async function getCkanPackageById(id: string): Promise<CKANPackageSearchResult> {
   const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_show`);
   url.searchParams.set('id', id);
-  // console.log(`Start ${url.toString()}`);
   const res = await fetch(url.toString(), {
     headers: {
       'User-Agent': USER_AGENT,
     },
   });
-  // console.log(`Status code: ${res.status} ${res.statusText} for ${url.toString()}`);
   const json = await res.json() as CKANResponse<CKANPackageSearchResult>;
   if (!json.success) {
     throw new Error('CKAN API returned an error: ' + JSON.stringify(json));
@@ -85,19 +85,33 @@ export function getUrlForCSVResource(res: CKANPackageSearchResult): string | und
 export type CSVParserIterator<T> = AsyncIterableIterator<T>;
 
 export async function *downloadAndExtract<T>(url: string): CSVParserIterator<T> {
-  // console.log(`Start ${url}`);
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': USER_AGENT,
-    },
-  });
-  // console.log(`Status code: ${res.status} ${res.statusText} for ${url}`);
-  const body = res.body;
-  if (!body) {
-    throw new Error('No body');
+  const cacheKey = url.replace(/[^a-zA-Z0-9]/g, '_');
+  const cacheFile = path.join(CACHE_DIR, 'files', cacheKey);
+  let bodyStream: Readable;
+  if (fs.existsSync(cacheFile)) {
+    // console.log(`${cacheFile} found in cache`);
+    bodyStream = fs.createReadStream(cacheFile);
+  } else {
+    // console.log(`Downloading ${url}`);
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    });
+
+    const body = res.body;
+    if (!body) {
+      throw new Error('No body');
+    }
+
+    const [bodyA, bodyB] = body.tee();
+    bodyStream = Readable.fromWeb(bodyA);
+
+    await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
+    const cacheStream = fs.createWriteStream(cacheFile);
+    Readable.fromWeb(bodyB).pipe(cacheStream);
   }
 
-  const bodyStream = Readable.fromWeb(body);
   const fileEntries = unzipAndExtractZipFile(bodyStream);
   for await (const entry of fileEntries) {
     const csvParser = entry.pipe(csvParse({
@@ -132,6 +146,9 @@ export async function getAndParseCSVDataForId<T = Record<string, string>>(id: st
   return Array.fromAsync(getAndStreamCSVDataForId<T>(id));
 }
 
-export function findResultByDataType(results: CKANPackageSearchResult[], dataType: string): CKANPackageSearchResult | undefined {
-  return results.find((result) => result.extras.find((extra) => extra.key === 'データセット種別' && extra.value === dataType));
+export function findResultByTypeAndArea(results: CKANPackageSearchResult[], dataType: string, area: string): CKANPackageSearchResult | undefined {
+  return results.find((result) => (
+    result.extras.findIndex((extra) => (extra.key === "データセット種別" && extra.value === dataType)) > 0 &&
+    result.extras.findIndex((extra) => (extra.key === "対象地域" && extra.value === area)) > 0
+  ));
 }

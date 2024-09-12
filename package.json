@@ -2,12 +2,15 @@
   "name": "japanese-addresses-v2",
   "type": "module",
   "version": "1.0.0",
-  "description": "全国の町丁目、大字、小字レベルの住所データ（277,543件）をオープンデータとして公開いたします。",
+  "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "tsc",
+    "clear:cache": "shx rm -rf ./cache",
     "run:01_make_prefecture_city": "tsx ./src/01_make_prefecture_city.ts",
     "run:02_make_machi_aza": "tsx ./src/02_make_machi_aza.ts",
     "run:03_make_rsdt": "tsx ./src/03_make_rsdt.ts",
+    "run:04_make_chiban": "node --max-old-space-size=8192 --import tsx ./src/04_make_chiban.ts",
     "test": "glob -c \"node --test --import tsx\" \"./src/**/*.test.ts\""
   },
   "keywords": [],
@@ -15,14 +18,17 @@
   "license": "MIT",
   "devDependencies": {
     "@tsconfig/node22": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.5.4",
     "@types/proj4": "^2.5.5",
     "@types/unzipper": "^0.10.10",
     "glob": "^11.0.0",
+    "shx": "^0.3.4",
     "tsx": "^4.19.0",
     "typescript": "^5.6.2"
   },
   "dependencies": {
+    "better-sqlite3": "^11.3.0",
     "csv-parse": "^5.5.6",
     "proj4": "^2.12.1",
     "undici": "^6.19.8",
