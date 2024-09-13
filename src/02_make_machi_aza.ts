@@ -3,10 +3,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { getAndStreamCSVDataForId } from './lib/ckan.js';
+import { getAndParseCSVDataForId, getAndStreamCSVDataForId } from './lib/ckan.js';
 import { MachiAzaApi } from './data.js';
 import { projectABRData } from './lib/proj.js';
-import { MachiAzaData, MachiAzaPosData, mergeMachiAzaData } from './lib/ckan_data/machi_aza.js';
+import { MachiAzaData, MachiAzaPosData } from './lib/ckan_data/machi_aza.js';
+import { mergeDataLeftJoin } from './lib/ckan_data/index.js';
 
 async function outputMachiAzaData(outDir: string, prefName: string, cityName: string, apiData: MachiAzaApi) {
   const outFile = path.join(outDir, 'ja', prefName, `${cityName}.json`);
@@ -19,9 +20,11 @@ async function main(argv: string[]) {
   const outDir = argv[2] || path.join(import.meta.dirname, '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
+
   const mainStream = getAndStreamCSVDataForId<MachiAzaData>('ba-o1-000000_g2-000003');
   const posStream = getAndStreamCSVDataForId<MachiAzaPosData>('ba000004');
-  const rawData = mergeMachiAzaData(mainStream, posStream);
+  const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id']);
+  // const rawData = mergeMachiAzaData(mainStream, posStream);
 
   let lastLGCode: string | undefined = undefined;
   let lastPrefName: string | undefined = undefined;

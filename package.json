@@ -11,6 +11,7 @@
     "run:02_make_machi_aza": "tsx ./src/02_make_machi_aza.ts",
     "run:03_make_rsdt": "tsx ./src/03_make_rsdt.ts",
     "run:04_make_chiban": "node --max-old-space-size=8192 --import tsx ./src/04_make_chiban.ts",
+    "create:archive": "7zz a ./api.7z ./out/api",
     "test": "glob -c \"node --test --import tsx\" \"./src/**/*.test.ts\""
   },
   "keywords": [],
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@tsconfig/node22": "^22.0.0",
     "@types/better-sqlite3": "^7.6.11",
+    "@types/cli-progress": "^3.11.6",
     "@types/node": "^22.5.4",
     "@types/proj4": "^2.5.5",
     "@types/unzipper": "^0.10.10",
@@ -29,6 +31,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
+    "cli-progress": "^3.12.0",
     "csv-parse": "^5.5.6",
     "proj4": "^2.12.1",
     "undici": "^6.19.8",

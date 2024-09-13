@@ -1,6 +1,3 @@
-import Database from "better-sqlite3";
-import { joinAsyncIterators } from "../stream_tools.js";
-
 export type ChibanData = {
   /// 全国地方公共団体コード
   lg_code: string
@@ -84,67 +81,3 @@ export type ChibanPosData = {
   /// 法務省地図_筆id
   moj_map_brushid: string;
 };
-
-export type ChibanDataWithPos = ChibanData | ChibanData & ChibanPosData;
-
-export function mergeChibanData(chibanData: ChibanData[], chibanPosData: ChibanPosData[]): ChibanDataWithPos[] {
-  const db = new Database(":memory:");
-  db.exec(`
-    CREATE TABLE chiban_data (
-      key TEXT,
-      data TEXT
-    );
-    CREATE TABLE chiban_pos_data (
-      key TEXT,
-      data TEXT
-    );
-  `);
-  const stmt1 = db.prepare("INSERT INTO chiban_data VALUES (?, ?)");
-  const stmt2 = db.prepare("INSERT INTO chiban_pos_data VALUES (?, ?)");
-  for (const data of chibanData) {
-    stmt1.run([data.lg_code,data.machiaza_id,data.prc_id].join('|'), JSON.stringify(data));
-  }
-  for (const data of chibanPosData) {
-    stmt2.run([data.lg_code,data.machiaza_id,data.prc_id].join('|'), JSON.stringify(data));
-  }
-  const out: ChibanDataWithPos[] = [];
-  for (const data of db.prepare<void[], {d01: string, d02: string}>(`
-    SELECT
-      chiban_data.data as d01,
-      chiban_pos_data.data as d02
-    FROM
-      chiban_data
-      LEFT JOIN chiban_pos_data ON chiban_data.key = chiban_pos_data.key
-  `).iterate()) {
-    out.push({ ...JSON.parse(data.d01), ...JSON.parse(data.d02) });
-  }
-  return out;
-}
-
-// export function mergeChibanData(
-//   chibanData: AsyncIterableIterator<ChibanData>,
-//   chibanPosData: AsyncIterableIterator<ChibanPosData>
-// ): AsyncIterableIterator<ChibanDataWithPos> {
-//   return joinAsyncIterators(chibanData, chibanPosData, (x, y) => (
-//     x.lg_code === y.lg_code &&
-//     x.machiaza_id === y.machiaza_id &&
-//     x.prc_id === y.prc_id
-//   ), "lg_code");
-// }
-
-// export function mergeChibanData(chibanData: ChibanData[], chibanPosData: ChibanPosData[]): ChibanDataWithPos[] {
-//   const out: ChibanDataWithPos[] = [];
-//   for (const chiban of chibanData) {
-//     const pos = chibanPosData.find((pos) => (
-//       pos.lg_code === chiban.lg_code &&
-//       pos.machiaza_id === chiban.machiaza_id &&
-//       pos.prc_id === chiban.prc_id
-//     ));
-//     if (pos) {
-//       out.push({ ...chiban, ...pos });
-//     } else {
-//       out.push(chiban);
-//     }
-//   }
-//   return out;
-// }

@@ -2,13 +2,17 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+
+import cliProgress from 'cli-progress';
+
 import { ckanPackageSearch, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from './lib/ckan.js';
 import { ChibanApi } from './data.js';
 import { projectABRData } from './lib/proj.js';
 import { MachiAzaData } from './lib/ckan_data/machi_aza.js';
-import { ChibanData, ChibanDataWithPos, ChibanPosData, mergeChibanData } from './lib/ckan_data/chiban.js';
+import { ChibanData, ChibanPosData } from './lib/ckan_data/chiban.js';
+import { mergeDataLeftJoin } from './lib/ckan_data/index.js';
 
-function pathParts(machiAzaData: Map<string, MachiAzaData>, rsdtData: ChibanDataWithPos) {
+function pathParts(machiAzaData: Map<string, MachiAzaData>, rsdtData: ChibanData) {
   const ma = machiAzaData.get(`${rsdtData.lg_code}|${rsdtData.machiaza_id}`);
   if (!ma) {
     // 町字のデータが無い時は合併などで廃止された可能性があるため、エラーにしない
@@ -22,14 +26,14 @@ function pathParts(machiAzaData: Map<string, MachiAzaData>, rsdtData: ChibanData
   ];
 }
 
-function outputChibanData(outDir: string, outSubDir: string, apiData: ChibanApi) {
+async function outputChibanData(outDir: string, outSubDir: string, apiData: ChibanApi) {
   if (apiData.length === 0) {
     return;
   }
   const outFile = path.join(outDir, 'ja', outSubDir, '地番.json');
-  fs.mkdirSync(path.dirname(outFile), { recursive: true });
-  fs.writeFileSync(outFile, JSON.stringify(apiData, null, 2));
-  console.log(`${outSubDir}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の地番を出力した`);
+  await fs.promises.mkdir(path.dirname(outFile), { recursive: true });
+  await fs.promises.writeFile(outFile, JSON.stringify(apiData, null, 2));
+  // console.log(`${outSubDir}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の地番を出力した`);
 }
 
 async function main(argv: string[]) {
@@ -42,14 +46,27 @@ async function main(argv: string[]) {
     `${ma.lg_code}|${ma.machiaza_id}`,
     ma
   ]));
-  console.log('事前準備: 町字データを取得しました');
-  const alreadyProcessed = new Set<string>();
+  const cities: MachiAzaData[] = [];
   for (const ma of machiAzaData) {
-    if (alreadyProcessed.has(ma.lg_code)) {
+    if (cities.findIndex((c) => c.lg_code === ma.lg_code) > 0) {
       continue;
     }
-    alreadyProcessed.add(ma.lg_code);
+    cities.push(ma);
+  }
+  console.log('事前準備: 町字データを取得しました');
 
+  const progressInst = new cliProgress.MultiBar({
+    format: ' {bar} {percentage}% | ETA: {eta_formatted} | {value}/{total}',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    etaBuffer: 30,
+    fps: 2,
+    // No-TTY output is required for CI/CD environments
+    noTTYOutput: true,
+  });
+  const progress = progressInst.create(cities.length, 0);
+
+  for (const ma of cities) {
     let area = `${ma.pref} ${ma.county}${ma.city}`;
     if (ma.ward !== '') {
       area += ` ${ma.ward}`;
@@ -63,17 +80,14 @@ async function main(argv: string[]) {
       continue;
     }
 
-    // const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.name);
-    // const posStream = getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.name);
-    const [
-      mainStream,
-      posStream,
-    ] = await Promise.all([
-      getAndParseCSVDataForId<ChibanData>(chibanDataRef.name),
-      chibanPosDataRef ? getAndParseCSVDataForId<ChibanPosData>(chibanPosDataRef.name) : [], // 位置参照拡張データが無い場合もある
-    ]);
-    const rawData = mergeChibanData(mainStream, posStream);
+    const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.name);
+    const posStream = chibanPosDataRef ?
+      getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.name)
+      :
+      // 位置参照拡張データが無い場合もある
+      (async function*() {})();
 
+    const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id', 'prc_id'], true);
     // console.log(`処理: ${ma.pref} ${ma.county}${ma.city} ${ma.ward} の地番データを処理中...`);
 
     let lastOutDir: string | undefined = undefined;
@@ -85,7 +99,7 @@ async function main(argv: string[]) {
       }
       const myOutDir = path.join(...parts);
       if (lastOutDir !== myOutDir && lastOutDir !== undefined) {
-        outputChibanData(outDir, lastOutDir, apiData);
+        await outputChibanData(outDir, lastOutDir, apiData);
         apiData = [];
       }
       if (lastOutDir !== myOutDir) {
@@ -99,9 +113,11 @@ async function main(argv: string[]) {
       });
     }
     if (lastOutDir) {
-      outputChibanData(outDir, lastOutDir, apiData);
+      await outputChibanData(outDir, lastOutDir, apiData);
     }
+    progress.increment();
   }
+  progress.stop();
 }
 
 main(process.argv)

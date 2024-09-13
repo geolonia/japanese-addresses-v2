@@ -1,4 +1,4 @@
-import { joinAsyncIterators } from "../stream_tools.js";
+import { mergeDataLeftJoin } from "./index.js";
 
 export type RsdtdspRsdtData = {
   /// 全国地方公共団体コード
@@ -84,11 +84,5 @@ export function mergeRsdtdspRsdtData(
   rsdtdspRsdtData: AsyncIterableIterator<RsdtdspRsdtData>,
   rsdtdspRsdtPosData: AsyncIterableIterator<RsdtdspRsdtPosData>
 ): AsyncIterableIterator<RsdtdspRsdtDataWithPos> {
-  return joinAsyncIterators(rsdtdspRsdtData, rsdtdspRsdtPosData, (x, y) => (
-    x.lg_code === y.lg_code &&
-    x.machiaza_id === y.machiaza_id &&
-    x.blk_id === y.blk_id &&
-    x.rsdt_id === y.rsdt_id &&
-    x.rsdt2_id === y.rsdt2_id
-  ), "lg_code");
+  return mergeDataLeftJoin(rsdtdspRsdtData, rsdtdspRsdtPosData, ["lg_code", "machiaza_id", "blk_id", "rsdt_id", "rsdt2_id"]);
 }

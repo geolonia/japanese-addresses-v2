@@ -1,5 +1,3 @@
-import { joinAsyncIterators } from "../stream_tools.js";
-
 export type MachiAzaData = {
   /// 全国地方公共団体コード
   lg_code: string;
@@ -117,14 +115,3 @@ export type MachiAzaPosData = {
   /// 国勢調査_境界_データ整備年度
   cns_bnd_year: string;
 };
-
-export type MachiAzaDataWithPos = MachiAzaData | MachiAzaData & MachiAzaPosData;
-
-export function mergeMachiAzaData(
-  machiAzaData: AsyncIterableIterator<MachiAzaData>,
-  machiAzaPosData: AsyncIterableIterator<MachiAzaPosData>
-): AsyncIterableIterator<MachiAzaDataWithPos> {
-  return joinAsyncIterators(machiAzaData, machiAzaPosData, (machiAza, pos) => (
-    machiAza.lg_code === pos.lg_code && machiAza.machiaza_id === pos.machiaza_id
-  ), "lg_code");
-}
