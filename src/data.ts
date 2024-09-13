@@ -12,6 +12,9 @@ export type SinglePrefecture = {
 
   cities: SingleCity[];
 };
+export function prefectureName(pref: SinglePrefecture): string {
+  return pref.pref;
+}
 
 /**
  * 都道府県、市区町村一覧API
@@ -33,6 +36,11 @@ export type SingleCity = {
   /// 代表点 (自治体役場の位置)
   point: LngLat;
 };
+
+export function cityName(city: SingleCity): string {
+  return `${city.county || ''}${city.city}${city.ward || ''}`;
+}
+
 /**
  * 市区町村一覧API
  * @file api/ja/{都道府県名}.json
@@ -56,6 +64,11 @@ export type SingleMachiAza = {
   /// 代表点
   point?: LngLat;
 };
+
+export function machiAzaName(machiAza: SingleMachiAza): string {
+  return `${machiAza.oaza_cho || ''}${machiAza.chome || ''}${machiAza.koaza || ''}`;
+}
+
 /**
  * 町字一覧API
  * @file api/ja/{都道府県名}/{市区町村名}.json

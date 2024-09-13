@@ -5,7 +5,8 @@
     "lib": ["ESNext"],
     "rootDir": "src",
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    "declaration": true
   },
   "filesGlob": ["./src/**/*.ts"],
   "include": ["src/**/*.ts"],
