@@ -87,9 +87,13 @@ export type SingleRsdt = {
   point?: LngLat;
 };
 /**
- * @file api/ja/{都道府県名}/{市区町村名}/{町字}/住居表示.json
+ * {市区町村名}-住居表示.json は類似なデータフォーマットを使います。
+ * @file api/ja/{都道府県名}/{市区町村名}-住居表示.json
  */
-export type RsdtApi = SingleRsdt[];
+export type RsdtApi = {
+  machiAza: SingleMachiAza;
+  rsdts: SingleRsdt[];
+}[];
 
 export type SingleChiban = {
   /// 地番1
@@ -103,6 +107,10 @@ export type SingleChiban = {
   point?: LngLat;
 };
 /**
- * @file api/ja/{都道府県名}/{市区町村名}/{町字}/地番.json
+ * {市区町村名}-地番.txt は類似なデータフォーマットを使います。
+ * @file api/ja/{都道府県名}/{市区町村名}-地番.json
  */
-export type ChibanApi = SingleChiban[];
+export type ChibanApi = {
+  machiAza: SingleMachiAza;
+  chibans: SingleChiban[];
+}[];

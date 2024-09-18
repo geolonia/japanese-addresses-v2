@@ -8,6 +8,7 @@ import { MachiAzaApi } from './data.js';
 import { projectABRData } from './lib/proj.js';
 import { MachiAzaData, MachiAzaPosData } from './lib/ckan_data/machi_aza.js';
 import { mergeDataLeftJoin } from './lib/ckan_data/index.js';
+import { rawToMachiAza } from './02_machi_aza.js';
 
 async function outputMachiAzaData(outDir: string, prefName: string, cityName: string, apiData: MachiAzaApi) {
   const outFile = path.join(outDir, 'ja', prefName, `${cityName}.json`);
@@ -42,14 +43,7 @@ async function main(argv: string[]) {
       lastPrefName = raw.pref;
       lastCityName = `${raw.county}${raw.city}${raw.ward}`;
     }
-    apiData.push({
-      machiaza_id: raw.machiaza_id,
-      oaza_cho: raw.oaza_cho === '' ? undefined : raw.oaza_cho,
-      chome: raw.chome === '' ? undefined : raw.chome,
-      koaza: raw.koaza === '' ? undefined : raw.koaza,
-      rsdt: raw.rsdt_addr_flg === '1' ? true : undefined,
-      point: 'rep_srid' in raw ? projectABRData(raw) : undefined,
-    });
+    apiData.push(rawToMachiAza(raw));
   }
   if (lastLGCode) {
     outputMachiAzaData(outDir, lastPrefName!, lastCityName!, apiData);
