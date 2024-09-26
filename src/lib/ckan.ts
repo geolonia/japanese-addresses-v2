@@ -47,14 +47,25 @@ export type CKANPackageResource = {
 }
 
 export async function ckanPackageSearch(query: string): Promise<CKANPackageSearchResult[]> {
-  const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_search`);
-  url.searchParams.set('q', query);
-  const res = await fetch(url.toString(), {
-    headers: {
-      'User-Agent': USER_AGENT,
-    },
-  });
-  const json = await res.json() as CKANResponse<CKANPackageSearchResultList>;
+  const cacheKey = `package_search_${query}.json`;
+  const cacheFile = path.join(CACHE_DIR, 'ckan', cacheKey);
+
+  let json: CKANResponse<CKANPackageSearchResultList>;
+  if (fs.existsSync(cacheFile)) {
+    json = await fs.promises.readFile(cacheFile, 'utf-8').then((data) => JSON.parse(data));
+  } else {
+    const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_search`);
+    url.searchParams.set('q', query);
+    const res = await fetch(url.toString(), {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    });
+    json = await res.json() as CKANResponse<CKANPackageSearchResultList>;
+
+    await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
+    await fs.promises.writeFile(cacheFile, JSON.stringify(json));
+  }
 
   if (!json.success) {
     throw new Error('CKAN API returned an error: ' + JSON.stringify(json));
@@ -64,14 +75,25 @@ export async function ckanPackageSearch(query: string): Promise<CKANPackageSearc
 }
 
 export async function getCkanPackageById(id: string): Promise<CKANPackageSearchResult> {
-  const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_show`);
-  url.searchParams.set('id', id);
-  const res = await fetch(url.toString(), {
-    headers: {
-      'User-Agent': USER_AGENT,
-    },
-  });
-  const json = await res.json() as CKANResponse<CKANPackageSearchResult>;
+  const cacheKey = `package_show_${id}.json`;
+  const cacheFile = path.join(CACHE_DIR, 'ckan', cacheKey);
+
+  let json: CKANResponse<CKANPackageSearchResult>;
+  if (fs.existsSync(cacheFile)) {
+    json = await fs.promises.readFile(cacheFile, 'utf-8').then((data) => JSON.parse(data));
+  } else {
+    const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_show`);
+    url.searchParams.set('id', id);
+    const res = await fetch(url.toString(), {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    });
+    json = await res.json() as CKANResponse<CKANPackageSearchResult>;
+
+    await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
+    await fs.promises.writeFile(cacheFile, JSON.stringify(json));
+  }
   if (!json.success) {
     throw new Error('CKAN API returned an error: ' + JSON.stringify(json));
   }
