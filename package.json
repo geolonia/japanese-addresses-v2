@@ -9,7 +9,7 @@
     "build:proto": "protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=. ./src/address_data.proto",
     "build": "tsc",
     "clear:cache": "shx rm -rf ./cache",
-    "run": "npm run run:01_make_prefecture_city && npm run run:02_make_machi_aza && npm run run:03_make_rsdt && npm run run:04_make_chiban",
+    "run:all": "npm run run:01_make_prefecture_city && npm run run:02_make_machi_aza && npm run run:03_make_rsdt && npm run run:04_make_chiban",
     "run:01_make_prefecture_city": "tsx ./src/01_make_prefecture_city.ts",
     "run:02_make_machi_aza": "tsx ./src/02_make_machi_aza.ts",
     "run:03_make_rsdt": "tsx ./src/03_make_rsdt.ts",

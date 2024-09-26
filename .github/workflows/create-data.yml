@@ -1,0 +1,40 @@
+name: Create Data
+
+on:
+  # TODO: Run this workflow every month
+  # schedule:
+  #   - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          key: 'v1'
+          path: cache
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create all data
+        run: npm run run:all
+
+      - name: Deploy to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ vars.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+        run: |
+          aws s3 sync --region="auto" --endpoint="$R2_ENDPOINT" ./out/ s3://japanese-addresses-v2/
