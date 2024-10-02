@@ -51,7 +51,7 @@ jobs:
           R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
         run: |
           aws s3 sync \
-            --cache-control="max-age=86400, s-maxage=103680, public" \
+            --cache-control="max-age=86400, public" \
             --region="auto" \
             --endpoint="$R2_ENDPOINT" \
             ./out/ s3://japanese-addresses-v2/
