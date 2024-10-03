@@ -1,11 +1,11 @@
-import { MachiAzaApi } from "../data.js";
+import { MachiAzaApi, SingleMachiAza } from "../data.js";
 import { NlftpMlitDataRow } from "./mlit_nlftp.js";
 
 export function filterMlitDataByPrefCity(mlitData: NlftpMlitDataRow[], prefName: string, cityName: string): NlftpMlitDataRow[] {
   return mlitData.filter(row => row.pref_name === prefName && row.city_name === cityName);
 }
 
-export function createMergedApiData(abrData: MachiAzaApi, mlitData: NlftpMlitDataRow[]): MachiAzaApi {
+export function createMergedApiData(abrData: SingleMachiAza[], mlitData: NlftpMlitDataRow[]): SingleMachiAza[] {
   const out = abrData;
 
   for (const row of mlitData) {

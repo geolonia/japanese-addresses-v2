@@ -3,9 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { getAndParseCSVDataForId, getAndStreamCSVDataForId } from './lib/ckan.js';
-import { MachiAzaApi } from './data.js';
-import { projectABRData } from './lib/proj.js';
+import { getAndStreamCSVDataForId } from './lib/ckan.js';
+import { MachiAzaApi, SingleMachiAza } from './data.js';
 import { MachiAzaData, MachiAzaPosData } from './lib/ckan_data/machi_aza.js';
 import { mergeDataLeftJoin } from './lib/ckan_data/index.js';
 import { rawToMachiAza } from './02_machi_aza.js';
@@ -16,16 +15,17 @@ async function outputMachiAzaData(
   outDir: string,
   prefName: string,
   cityName: string,
-  apiData: MachiAzaApi,
+  api: MachiAzaApi,
 ): Promise<number> {
   const outFile = path.join(outDir, 'ja', prefName, `${cityName}.json`);
   await fs.promises.mkdir(path.dirname(outFile), { recursive: true });
-  await fs.promises.writeFile(outFile, JSON.stringify(apiData, null, 2));
-  console.log(`${prefName.padEnd(4, '　')} ${cityName.padEnd(10, '　')}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字を出力した`);
-  return apiData.length;
+  await fs.promises.writeFile(outFile, JSON.stringify(api));
+  console.log(`${prefName.padEnd(4, '　')} ${cityName.padEnd(10, '　')}: ${api.data.length.toString(10).padEnd(4, ' ')} 件の町字を出力した`);
+  return api.data.length;
 }
 
 async function main(argv: string[]) {
+  const updated = Math.floor(Date.now() / 1000);
   const outDir = argv[2] || path.join(import.meta.dirname, '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -40,12 +40,13 @@ async function main(argv: string[]) {
   let lastCityName: string | undefined = undefined;
   let lastMlitData: NlftpMlitDataRow[] | undefined = undefined;
   let allCount = 0;
-  let apiData: MachiAzaApi = [];
+  let apiData: SingleMachiAza[] = [];
   for await (const raw of rawData) {
     if (lastLGCode !== raw.lg_code && lastLGCode !== undefined) {
       const filteredMlit = filterMlitDataByPrefCity(lastMlitData!, lastPrefName!, lastCityName!);
       apiData = createMergedApiData(apiData, filteredMlit);
-      allCount += await outputMachiAzaData(outDir, lastPrefName!, lastCityName!, apiData);
+      const api: MachiAzaApi = { meta: { updated }, data: apiData };
+      allCount += await outputMachiAzaData(outDir, lastPrefName!, lastCityName!, api);
       apiData = [];
     }
     if (lastPrefName !== raw.pref) {
@@ -63,7 +64,8 @@ async function main(argv: string[]) {
   if (lastLGCode) {
     const filteredMlit = filterMlitDataByPrefCity(lastMlitData!, lastPrefName!, lastCityName!);
     apiData = createMergedApiData(apiData, filteredMlit);
-    allCount += await outputMachiAzaData(outDir, lastPrefName!, lastCityName!, apiData);
+    const api: MachiAzaApi = { meta: { updated }, data: apiData };
+    allCount += await outputMachiAzaData(outDir, lastPrefName!, lastCityName!, api);
   }
 
   console.log(`全国: ${allCount} 件の町字を出力した`);
