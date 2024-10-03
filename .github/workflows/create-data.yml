@@ -10,6 +10,11 @@ jobs:
   create-data:
     runs-on: ubuntu-latest
 
+    # id-token: write is required for AWS authentication
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
       - name: Remove unused software
         run: |
@@ -44,16 +49,28 @@ jobs:
       - name: Create all data
         run: npm run run:all
 
-      - name: Deploy to R2
-        env:
-          AWS_ACCESS_KEY_ID: ${{ vars.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ vars.R2_ENDPOINT }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-northeast-1
+
+      - name: Deploy to AWS
         run: |
           aws s3 sync \
             --cache-control="max-age=86400, public" \
-            --region="auto" \
-            --endpoint="$R2_ENDPOINT" \
-            ./out/ s3://japanese-addresses-v2/
+            ./out/ s3://japanese-addresses-v2.geoloniamaps.com/
 
-      # TODO: Purge Cloudflare cache
+      - name: Purge Cloudflare cache
+        env:
+          CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
+        run: |
+          curl --request POST \
+            --url https://api.cloudflare.com/client/v4/zones/zone_id/purge_cache \
+            --header 'Content-Type: application/json' \
+            --header "Authorization: Bearer ${CLOUDFLARE_TOKEN}" \
+            --data '{
+              "files": [
+                "https://japanese-addresses-v2.geoloniamaps.com/api/ja.json"
+              ]
+            }'
