@@ -8,10 +8,13 @@ import {
 test.describe('downloadAndExtractNlftpMlitFile', () => {
   test('it works', async () => {
     // 沖縄県
-    const data = await downloadAndExtractNlftpMlitFile('47', '22.0a');
-    assert.strictEqual(data.length, 986);
-    assert.strictEqual(data[0].prefName, '沖縄県');
-    assert.strictEqual(data[0].cityName, 'うるま市');
-    assert.strictEqual(data[0].oazaCho, 'みどり町一丁目');
+    const data = await downloadAndExtractNlftpMlitFile('47');
+    assert.strictEqual(data.length, 1228);
+    assert.strictEqual(data[0].machiaza_id, 'MLIT:472010001001');
+    assert.strictEqual(data[0].pref_name, '沖縄県');
+    assert.strictEqual(data[0].city_name, '那覇市');
+    assert.strictEqual(data[0].oaza_cho, '古波蔵');
+    assert.strictEqual(data[0].chome, '一丁目');
+    assert.strictEqual(data[0].point.length, 2);
   });
 });

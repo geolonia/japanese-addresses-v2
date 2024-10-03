@@ -9,12 +9,20 @@ import { projectABRData } from './lib/proj.js';
 import { MachiAzaData, MachiAzaPosData } from './lib/ckan_data/machi_aza.js';
 import { mergeDataLeftJoin } from './lib/ckan_data/index.js';
 import { rawToMachiAza } from './02_machi_aza.js';
+import { downloadAndExtractNlftpMlitFile, NlftpMlitDataRow } from './lib/mlit_nlftp.js';
+import { createMergedApiData, filterMlitDataByPrefCity } from './lib/abr_mlit_merge_tools.js';
 
-async function outputMachiAzaData(outDir: string, prefName: string, cityName: string, apiData: MachiAzaApi) {
+async function outputMachiAzaData(
+  outDir: string,
+  prefName: string,
+  cityName: string,
+  apiData: MachiAzaApi,
+): Promise<number> {
   const outFile = path.join(outDir, 'ja', prefName, `${cityName}.json`);
-  fs.mkdirSync(path.dirname(outFile), { recursive: true });
-  fs.writeFileSync(outFile, JSON.stringify(apiData, null, 2));
+  await fs.promises.mkdir(path.dirname(outFile), { recursive: true });
+  await fs.promises.writeFile(outFile, JSON.stringify(apiData, null, 2));
   console.log(`${prefName.padEnd(4, '　')} ${cityName.padEnd(10, '　')}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字を出力した`);
+  return apiData.length;
 }
 
 async function main(argv: string[]) {
@@ -30,23 +38,32 @@ async function main(argv: string[]) {
   let lastLGCode: string | undefined = undefined;
   let lastPrefName: string | undefined = undefined;
   let lastCityName: string | undefined = undefined;
+  let lastMlitData: NlftpMlitDataRow[] | undefined = undefined;
   let allCount = 0;
   let apiData: MachiAzaApi = [];
   for await (const raw of rawData) {
-    allCount++;
     if (lastLGCode !== raw.lg_code && lastLGCode !== undefined) {
-      outputMachiAzaData(outDir, lastPrefName!, lastCityName!, apiData);
+      const filteredMlit = filterMlitDataByPrefCity(lastMlitData!, lastPrefName!, lastCityName!);
+      apiData = createMergedApiData(apiData, filteredMlit);
+      allCount += await outputMachiAzaData(outDir, lastPrefName!, lastCityName!, apiData);
       apiData = [];
+    }
+    if (lastPrefName !== raw.pref) {
+      // 都道府県が変わったので、都道府県レベルの新しいデータを取得する
+      lastMlitData = await downloadAndExtractNlftpMlitFile(raw.lg_code.slice(0, 2));
     }
     if (lastLGCode !== raw.lg_code) {
       lastLGCode = raw.lg_code;
       lastPrefName = raw.pref;
       lastCityName = `${raw.county}${raw.city}${raw.ward}`;
     }
+
     apiData.push(rawToMachiAza(raw));
   }
   if (lastLGCode) {
-    outputMachiAzaData(outDir, lastPrefName!, lastCityName!, apiData);
+    const filteredMlit = filterMlitDataByPrefCity(lastMlitData!, lastPrefName!, lastCityName!);
+    apiData = createMergedApiData(apiData, filteredMlit);
+    allCount += await outputMachiAzaData(outDir, lastPrefName!, lastCityName!, apiData);
   }
 
   console.log(`全国: ${allCount} 件の町字を出力した`);

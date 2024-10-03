@@ -1,90 +1,74 @@
 import { parse as csvParse } from 'csv-parse';
 import iconv from 'iconv-lite';
-import * as turf from '@turf/turf';
 
 import { unzipAndExtractZipFile } from './zip_tools.js';
 import { getDownloadStream } from './fetch_tools.js';
 
+export type NlftpMlitDataRow = {
+  machiaza_id: string
+
+  pref_name: string
+  city_name: string
+
+  oaza_cho: string
+  chome?: string
+  point: [number, number]
+}
+
 // type NlftpMlitCsvRow = {
-//   0 "都道府県名": string
-//   1 "市区町村名": string
-//   2 "大字・丁目名": string
-//   3 "小字・通称名": string
-//   4 "街区符号・地番": string
-//   5 "座標系番号": string
-//   6 "Ｘ座標": string
-//   7 "Ｙ座標": string
-//   8 "緯度": string
-//   9 "経度": string
-//  10 "住居表示フラグ": string
-//  11 "代表フラグ": string
-//  12 "更新前履歴フラグ": string
-//  13 "更新後履歴フラグ": string
+//  0 "都道府県コード": string
+//  1 "都道府県名": string
+//  2 "市区町村コード": string
+//  3 "市区町村名": string
+//  4 "大字町丁目コード": string
+//  5 "大字町丁目名": string
+//  6 "緯度": string
+//  7 "経度": string
+//  8 "原典資料コード": string
+//  9 "大字・字・丁目区分コード": string
 // }
 
 function parseRows(rows: string[][]): NlftpMlitDataRow[] {
-  const data: {
-    [cityName: string]: {
-      [oazaCho: string]: {
-        points: [number, number][]
-      }
-    }
-  } = {};
-
-  let prefName: string | undefined = undefined;
-  for (const row of rows) {
-    // Skip header row
-    if (row[0] === '都道府県名') continue;
-
-    prefName ??= row[0];
-    const cityName = row[1];
-    const oazaCho = row[2];
-    const lat = parseFloat(row[8]);
-    const lon = parseFloat(row[9]);
-
-    if (!data[cityName]) {
-      data[cityName] = {};
-    }
-    if (!data[cityName][oazaCho]) {
-      data[cityName][oazaCho] = {
-        points: []
-      };
-    }
-
-    data[cityName][oazaCho].points.push([lon, lat]);
-  }
+  // remove header row
+  rows.shift();
+  // sort by code (should already be sorted, just in case)
+  rows.sort((a, b) => {
+    return a[4].localeCompare(b[4]);
+  });
 
   const result: NlftpMlitDataRow[] = [];
-  const sortedData = Object.entries(data);
-  // Sort by city name
-  sortedData.sort(([a], [b]) => a.localeCompare(b));
-  for (const [cityName, oazaChos] of sortedData) {
-    const sortedOazaChos = Object.entries(oazaChos);
-    // Sort by oazaCho name
-    sortedOazaChos.sort(([a], [b]) => a.localeCompare(b));
-    for (const [oazaCho, { points }] of sortedOazaChos) {
-      const features = turf.points(points);
-      const centerPoint = turf.center(features).geometry.coordinates as [number, number];
-
-      result.push({
-        prefName: prefName!,
-        cityName,
-        oazaCho,
-        centerPoint
-      });
+  for (const row of rows) {
+    let oaza_cho = row[5];
+    let chome: string | undefined = undefined;
+    const chomeMatch = oaza_cho.match(/^(.*?)([一二三四五六七八九十]+丁目)$/);
+    if (chomeMatch) {
+      oaza_cho = chomeMatch[1];
+      chome = chomeMatch[2];
     }
+
+    result.push({
+      machiaza_id: `MLIT:${row[4]}`,
+      pref_name: row[1],
+      city_name: row[3],
+      oaza_cho,
+      chome,
+      point: [
+        parseFloat(row[7]), // longitude
+        parseFloat(row[6]), // latitude
+      ],
+    });
   }
+
   return result;
 }
 
-type NlftpMlitDataRow = {
-  prefName: string
-  cityName: string
-  oazaCho: string
-  centerPoint: [number, number]
-}
-
-export async function downloadAndExtractNlftpMlitFile(prefCode: string, version: string): Promise<NlftpMlitDataRow[]> {
+/**
+ * 国土数値情報からデータをダウンロードしパースします。
+ * 参照: https://nlftp.mlit.go.jp/isj/
+ */
+export async function downloadAndExtractNlftpMlitFile(prefCode: string): Promise<NlftpMlitDataRow[]> {
+  const version = '17.0b'; // 大字・町丁目レベル位置参照情報
+  // 22.0a は街区レベル位置参照情報なので、ここには必要ない
   const url = `https://nlftp.mlit.go.jp/isj/dls/data/${version}/${prefCode}000-${version}.zip`;
   const bodyStream = await getDownloadStream(url);
   const entries = unzipAndExtractZipFile(bodyStream);
