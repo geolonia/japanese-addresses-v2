@@ -1,4 +1,3 @@
-import { Readable } from 'node:stream';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -6,6 +5,7 @@ import { parse as csvParse } from 'csv-parse';
 
 import { fetch } from 'undici';
 import { unzipAndExtractZipFile } from './zip_tools.js';
+import { getDownloadStream } from './fetch_tools.js';
 
 const CKAN_BASE_REGISTRY_URL = `https://catalog.registries.digital.go.jp/rc`
 const USER_AGENT = 'curl/8.7.1';
@@ -107,33 +107,7 @@ export function getUrlForCSVResource(res: CKANPackageSearchResult): string | und
 export type CSVParserIterator<T> = AsyncIterableIterator<T>;
 
 export async function *downloadAndExtract<T>(url: string): CSVParserIterator<T> {
-  const cacheKey = url.replace(/[^a-zA-Z0-9]/g, '_');
-  const cacheFile = path.join(CACHE_DIR, 'files', cacheKey);
-  let bodyStream: Readable;
-  if (fs.existsSync(cacheFile)) {
-    // console.log(`${cacheFile} found in cache`);
-    bodyStream = fs.createReadStream(cacheFile);
-  } else {
-    // console.log(`Downloading ${url}`);
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': USER_AGENT,
-      },
-    });
-
-    const body = res.body;
-    if (!body) {
-      throw new Error('No body');
-    }
-
-    const [bodyA, bodyB] = body.tee();
-    bodyStream = Readable.fromWeb(bodyA);
-
-    await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
-    const cacheStream = fs.createWriteStream(cacheFile);
-    Readable.fromWeb(bodyB).pipe(cacheStream);
-  }
-
+  const bodyStream = await getDownloadStream(url);
   const fileEntries = unzipAndExtractZipFile(bodyStream);
   for await (const entry of fileEntries) {
     const csvParser = entry.pipe(csvParse({

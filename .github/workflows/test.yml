@@ -24,7 +24,7 @@ jobs:
       - name: Cache
         uses: actions/cache@v4
         with:
-          key: 'v1'
+          key: v1-${{ hashFiles('src/**') }}
           path: cache
 
       - name: Install dependencies
