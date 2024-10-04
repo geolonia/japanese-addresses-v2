@@ -20,13 +20,13 @@
 #### 都道府県エンドポイント
 
 ```
-https://geolonia.github.io/japanese-addresses-v2/api/ja.json
+https://japanese-addresses-v2.geoloniamaps.com/api/ja.json
 ```
 
-例: [https://geolonia.github.io/japanese-addresses-v2/api/ja.json](https://geolonia.github.io/japanese-addresses-v2/api/ja.json)
+例: [https://japanese-addresses-v2.geoloniamaps.com/api/ja.json](https://japanese-addresses-v2.geoloniamaps.com/api/ja.json)
 
 ```
-[
+{ "meta": { "updated": 00000 }, "data": [
   {
     "code": 10006,
     "pref": "北海道",
@@ -53,40 +53,21 @@ https://geolonia.github.io/japanese-addresses-v2/api/ja.json
 #### 町字エンドポイント
 
 ```
-https://geolonia.github.io/japanese-addresses-v2/api/ja/<都道府県名>/<市区町村名>.json
+https://japanese-addresses-v2.geoloniamaps.com/api/ja/<都道府県名>/<市区町村名>.json
 ```
 
 ※ 都道府県名及び市区町村名は URL エンコードを行ってください。
 
-例: [https://geolonia.github.io/japanese-addresses-v2/api/ja/%E9%95%B7%E9%87%8E%E7%9C%8C/%E9%95%B7%E9%87%8E%E5%B8%82.json](https://geolonia.github.io/japanese-addresses-v2/api/ja/%E9%95%B7%E9%87%8E%E7%9C%8C/%E9%95%B7%E9%87%8E%E5%B8%82.json)
+例: [https://japanese-addresses-v2.geoloniamaps.com/api/ja/%E9%95%B7%E9%87%8E%E7%9C%8C/%E9%95%B7%E9%87%8E%E5%B8%82.json](https://japanese-addresses-v2.geoloniamaps.com/api/ja/%E9%95%B7%E9%87%8E%E7%9C%8C/%E9%95%B7%E9%87%8E%E5%B8%82.json)
 
 ```
-[
+{ "meta": { "updated": 00000 }, "data": [
   ...
-  {
-    "town": "篠ノ井塩崎",
-    "koaza": "四之宮",
-    "lat": 36.555444,
-    "lng": 138.10524
-  },
-  {
-    "town": "篠ノ井塩崎",
-    "koaza": "越",
-    "lat": 36.544766,
-    "lng": 138.104657
-  },
-  {
-    "town": "篠ノ井塩崎",
-    "koaza": "長谷",
-    "lat": 36.548163,
-    "lng": 138.101997
-  },
-  {
-    "town": "篠ノ井塩崎",
-    "koaza": "明戸",
-    "lat": 36.549686,
-    "lng": 138.106612
-  },
+  {"machiaza_id":"0000101","koaza":"い気","point":[138.184886,36.595508]},
+  {"machiaza_id":"0000102","koaza":"くぬぎ平","point":[137.986942,36.551842]},
+  {"machiaza_id":"0000103","koaza":"阿弥陀堂","point":[138.141331,36.603314]},
+  {"machiaza_id":"0000104","koaza":"旭町","point":[138.182414,36.654925]},
+  {"machiaza_id":"0000105","koaza":"芦ノ尻","point":[137.977664,36.487992]},
   ...
 ```
 
@@ -123,6 +104,8 @@ $ node bin/build-jyukyo-api.mjs # 住居符号レベルの API を追加で作�
 ```
 
 各ファイルの詳細な仕様は、 `src/data.ts` の型定義を参照してください。
+
+#### `txt` ファイル内のフォーマットについて
 
 `-地番.txt` と `-住居表示.txt` は容量節約のため、市区町村の住所を全て一つのファイルに集約するものです。そのテキストファイルのフォーマットは下記となります。
 

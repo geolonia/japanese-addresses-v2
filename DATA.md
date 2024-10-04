@@ -1,5 +1,7 @@
 # データ作成について
 
+下記元データのリンク
+
 * [全アドレスデータ](https://catalog.registries.digital.go.jp/rc/dataset/ba000001) (位置参照拡張含む、**地番マスターは含まず**)
 * [日本 都道府県マスター データセット `mt_pref_all`](https://catalog.registries.digital.go.jp/rc/dataset/ba-o1-000000_g2-000001) [位置参照拡張 `mt_pref_pos_all`](https://catalog.registries.digital.go.jp/rc/dataset/ba-o1-000000_g2-000012)
 * [日本 市区町村マスター データセット `mt_city_all`](https://catalog.registries.digital.go.jp/rc/dataset/ba-o1-000000_g2-000002) [位置参照拡張 `mt_city_pos_all`](https://catalog.registries.digital.go.jp/rc/dataset/ba-o1-000000_g2-000013)
