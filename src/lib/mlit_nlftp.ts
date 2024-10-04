@@ -4,6 +4,12 @@ import iconv from 'iconv-lite';
 import { unzipAndExtractZipFile } from './zip_tools.js';
 import { getDownloadStream } from './fetch_tools.js';
 
+const SKIP_ROWS = new Set([
+  // 国土数値情報では「柿さき町」で登録されているが、ABRには「柿崎町」として登録されている。
+  // 柿崎町を優先するので、「柿さき町」はスキップする。
+  '愛知県/安城市/柿さき町',
+]);
+
 export type NlftpMlitDataRow = {
   machiaza_id: string
 
@@ -38,6 +44,8 @@ function parseRows(rows: string[][]): NlftpMlitDataRow[] {
 
   const result: NlftpMlitDataRow[] = [];
   for (const row of rows) {
+    if (SKIP_ROWS.has(`${row[1]}/${row[3]}/${row[5]}`)) continue;
+
     let oaza_cho = row[5];
     let chome: string | undefined = undefined;
     const chomeMatch = oaza_cho.match(/^(.*?)([一二三四五六七八九十]+丁目)$/);

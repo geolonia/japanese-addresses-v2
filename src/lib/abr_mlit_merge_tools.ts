@@ -1,4 +1,4 @@
-import { MachiAzaApi, SingleMachiAza } from "../data.js";
+import { SingleMachiAza } from "../data.js";
 import { NlftpMlitDataRow } from "./mlit_nlftp.js";
 
 export function filterMlitDataByPrefCity(mlitData: NlftpMlitDataRow[], prefName: string, cityName: string): NlftpMlitDataRow[] {
