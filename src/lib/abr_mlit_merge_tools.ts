@@ -9,7 +9,10 @@ export function createMergedApiData(abrData: SingleMachiAza[], mlitData: NlftpMl
   const out = abrData;
 
   for (const row of mlitData) {
-    if (abrData.find(a => a.oaza_cho === row.oaza_cho && a.chome === row.chome)) {
+    if (abrData.find(a => (
+      (a.oaza_cho === row.oaza_cho && a.chome === row.chome) ||
+      a.koaza === row.oaza_cho
+    ))) {
       continue;
     }
     out.push({
