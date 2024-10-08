@@ -78,13 +78,13 @@ https://japanese-addresses-v2.geoloniamaps.com/api/ja/<都道府県名>/<市区�
 $ git clone git@github.com:geolonia/japanese-addresses-v2.git
 $ cd japanese-addresses-v2
 $ npm install
-$ npm run build # 元データのダウンロードと latest.csv 及び latest_gaiku.csv の作成を行います
-$ npm run build:api # latest.csv から API を作成します
+$ npm run run:all # APIを全て生成する
 
 # オプション
-$ node bin/build-gaiku-api.mjs # 街区レベルの API を追加で作成します
-$ sh bin/download-residential.sh # ベースレジストリのデータのダウンロードを行います
-$ node bin/build-jyukyo-api.mjs # 住居符号レベルの API を追加で作成します
+$ npm run run:01_make_prefecture_city # 都道府県・市区町村のみ作成
+$ npm run run:02_make_machi_aza # 町字API作成
+$ npm run run:03_make_rsdt # 住居表示住所API作成 (町字APIが先に作らないとエラーになります)
+$ npm run run:04_make_chiban # 地番住所API作成 (町字APIが先に作らないとエラーになります)
 ```
 
 ### API の構成
