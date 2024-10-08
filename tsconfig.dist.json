@@ -1,0 +1,14 @@
+{
+  "extends": "@tsconfig/node22/tsconfig.json",
+  "compileOnSave": false,
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"],
+    "declaration": true
+  },
+  "files": [
+    "src/data.ts"
+  ]
+}

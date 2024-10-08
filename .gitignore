@@ -2,6 +2,7 @@ node_modules
 dist
 out
 cache
+.envrc
 *.0x
 *.7z
 explorer
