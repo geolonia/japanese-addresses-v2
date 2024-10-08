@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getAndParseCSVDataForId, getAndStreamCSVDataForId } from './lib/ckan.js';
 import { mergeRsdtdspRsdtData, RsdtdspRsdtData, RsdtdspRsdtDataWithPos, RsdtdspRsdtPosData } from './lib/ckan_data/rsdtdsp_rsdt.js';
-import { machiAzaName, RsdtApi, SingleRsdt } from './data.js';
+import { MachiAzaApi, machiAzaName, RsdtApi, SingleRsdt } from './data.js';
 import { projectABRData } from './lib/proj.js';
 import { MachiAzaData } from './lib/ckan_data/machi_aza.js';
 import { rawToMachiAza } from './02_machi_aza.js';
@@ -16,11 +16,17 @@ const HEADER_PBF_CHUNK_SIZE = 8_192;
 function getOutPath(ma: MachiAzaData) {
   return path.join(
     ma.pref,
-    `${ma.county}${ma.city}${ma.ward}-住居表示`,
+    `${ma.county}${ma.city}${ma.ward}`,
   );
 }
 
-function serializeApiDataTxt(apiData: RsdtApi): Buffer {
+type HeaderRow = {
+  name: string;
+  offset: number;
+  length: number;
+}
+
+function serializeApiDataTxt(apiData: RsdtApi): { headerIterations: number, headerData: HeaderRow[], data: Buffer } {
   let outSections: Buffer[] = [];
   for ( const { machiAza, rsdts } of apiData ) {
     let outSection = `住居表示,${machiAzaName(machiAza)}\n` +
@@ -35,10 +41,16 @@ function serializeApiDataTxt(apiData: RsdtApi): Buffer {
     let header = '';
     const headerMaxSize = HEADER_CHUNK_SIZE * iterations;
     let lastBytePos = headerMaxSize;
+    const headerData: HeaderRow[] = [];
     for (const [index, section] of outSections.entries()) {
       const ma = apiData[index].machiAza;
 
       header += `${machiAzaName(ma)},${lastBytePos},${section.length}\n`;
+      headerData.push({
+        name: machiAzaName(ma),
+        offset: lastBytePos,
+        length: section.length,
+      });
       lastBytePos += section.length;
     }
     const headerBuf = Buffer.from(header + '=END=\n', 'utf8');
@@ -47,86 +59,110 @@ function serializeApiDataTxt(apiData: RsdtApi): Buffer {
     } else {
       const padding = Buffer.alloc(headerMaxSize - headerBuf.length);
       padding.fill(0x20);
-      return Buffer.concat([headerBuf, padding]);
+      return {
+        iterations,
+        data: headerData,
+        buffer: Buffer.concat([headerBuf, padding])
+      };
     }
   };
 
   const header = createHeader();
-  return Buffer.concat([header, ...outSections]);
-}
-
-function _stringIfNotInteger(value: string | undefined) {
-  if (!value) { return undefined; }
-  return /^\d+$/.test(value) ? undefined : value;
-}
-
-function serializeApiDataPbf(apiData: RsdtApi): Buffer {
-  let outSections: Buffer[] = [];
-  for ( const { machiAza, rsdts } of apiData ) {
-    const section: AddrData.Section = {
-      kind: AddrData.Kind.RSDT,
-      name: machiAzaName(machiAza),
-      rsdtRows: [],
-      chibanRows: [],
-    }
-    for (const rsdt of rsdts) {
-      section.rsdtRows.push({
-        blkNum: rsdt.blk_num ? parseInt(rsdt.blk_num, 10) : undefined,
-        rsdtNum: parseInt(rsdt.rsdt_num, 10),
-        rsdtNum2: rsdt.rsdt_num2 ? parseInt(rsdt.rsdt_num2, 10) : undefined,
-        point: rsdt.point ? { lng: rsdt.point[0], lat: rsdt.point[1] } : undefined,
-        blkNumStr: _stringIfNotInteger(rsdt.blk_num),
-        rsdtNumStr: _stringIfNotInteger(rsdt.rsdt_num),
-        rsdtNum2Str: _stringIfNotInteger(rsdt.rsdt_num2),
-      });
-    }
-    const sectionBuf = Buffer.from(AddrData.Section.encode(section).finish());
-    outSections.push(sectionBuf);
-  }
-
-  const createHeader = (iterations = 1) => {
-    const header: AddrData.Header = {
-      kind: AddrData.Kind.RSDT,
-      rows: [],
-    };
-    const headerMaxSize = HEADER_PBF_CHUNK_SIZE * iterations;
-    let lastBytePos = headerMaxSize;
-    for (const [index, section] of outSections.entries()) {
-      const ma = apiData[index].machiAza;
-
-      header.rows.push({
-        name: machiAzaName(ma),
-        offset: lastBytePos,
-        length: section.length,
-      });
-      lastBytePos += section.length;
-    }
-    const headerBuf = Buffer.from(AddrData.Header.encode(header).finish());
-    if (headerBuf.length > headerMaxSize) {
-      return createHeader(iterations + 1);
-    } else {
-      const padding = Buffer.alloc(headerMaxSize - headerBuf.length);
-      padding.fill(0x00);
-      return Buffer.concat([headerBuf, padding]);
-    }
+  return {
+    headerIterations: header.iterations,
+    headerData: header.data,
+    data: Buffer.concat([header.buffer, ...outSections]),
   };
-
-  const header = createHeader();
-  return Buffer.concat([header, ...outSections]);
 }
 
-function outputRsdtData(outDir: string, outFilename: string, apiData: RsdtApi) {
-  const outFileJSON = path.join(outDir, 'ja', outFilename + '.json');
-  fs.mkdirSync(path.dirname(outFileJSON), { recursive: true });
+// function _stringIfNotInteger(value: string | undefined) {
+//   if (!value) { return undefined; }
+//   return /^\d+$/.test(value) ? undefined : value;
+// }
+
+// function serializeApiDataPbf(apiData: RsdtApi): Buffer {
+//   let outSections: Buffer[] = [];
+//   for ( const { machiAza, rsdts } of apiData ) {
+//     const section: AddrData.Section = {
+//       kind: AddrData.Kind.RSDT,
+//       name: machiAzaName(machiAza),
+//       rsdtRows: [],
+//       chibanRows: [],
+//     }
+//     for (const rsdt of rsdts) {
+//       section.rsdtRows.push({
+//         blkNum: rsdt.blk_num ? parseInt(rsdt.blk_num, 10) : undefined,
+//         rsdtNum: parseInt(rsdt.rsdt_num, 10),
+//         rsdtNum2: rsdt.rsdt_num2 ? parseInt(rsdt.rsdt_num2, 10) : undefined,
+//         point: rsdt.point ? { lng: rsdt.point[0], lat: rsdt.point[1] } : undefined,
+//         blkNumStr: _stringIfNotInteger(rsdt.blk_num),
+//         rsdtNumStr: _stringIfNotInteger(rsdt.rsdt_num),
+//         rsdtNum2Str: _stringIfNotInteger(rsdt.rsdt_num2),
+//       });
+//     }
+//     const sectionBuf = Buffer.from(AddrData.Section.encode(section).finish());
+//     outSections.push(sectionBuf);
+//   }
+
+//   const createHeader = (iterations = 1) => {
+//     const header: AddrData.Header = {
+//       kind: AddrData.Kind.RSDT,
+//       rows: [],
+//     };
+//     const headerMaxSize = HEADER_PBF_CHUNK_SIZE * iterations;
+//     let lastBytePos = headerMaxSize;
+//     for (const [index, section] of outSections.entries()) {
+//       const ma = apiData[index].machiAza;
+
+//       header.rows.push({
+//         name: machiAzaName(ma),
+//         offset: lastBytePos,
+//         length: section.length,
+//       });
+//       lastBytePos += section.length;
+//     }
+//     const headerBuf = Buffer.from(AddrData.Header.encode(header).finish());
+//     if (headerBuf.length > headerMaxSize) {
+//       return createHeader(iterations + 1);
+//     } else {
+//       const padding = Buffer.alloc(headerMaxSize - headerBuf.length);
+//       padding.fill(0x00);
+//       return Buffer.concat([headerBuf, padding]);
+//     }
+//   };
+
+//   const header = createHeader();
+//   return Buffer.concat([header, ...outSections]);
+// }
+
+async function outputRsdtData(outDir: string, outFilename: string, apiData: RsdtApi) {
+  const machiAzaJSON = path.join(outDir, 'ja', outFilename + '.json');
+  // fs.mkdirSync(path.dirname(machiAzaJSON), { recursive: true });
   // fs.writeFileSync(outFileJSON, JSON.stringify(apiData));
 
-  const outFileTXT = path.join(outDir, 'ja', outFilename + '.txt');
-  fs.writeFileSync(outFileTXT, serializeApiDataTxt(apiData));
+  const outFileTXT = path.join(outDir, 'ja', outFilename + '-住居表示.txt');
+  const txt = serializeApiDataTxt(apiData);
+  await fs.promises.writeFile(outFileTXT, txt.data);
+
+  // update machiAzaJSON
+  const machiAzaF = await fs.promises.open(machiAzaJSON, 'r+');
+  const maData = JSON.parse(await machiAzaF.readFile('utf8')) as MachiAzaApi;
+  maData.meta.updated = Math.floor(Date.now() / 1000);
+  for (const headerRow of txt.headerData) {
+    const ma = maData.data.find((ma) => machiAzaName(ma) === headerRow.name);
+    if (ma) {
+      ma.csv_ranges = ma.csv_ranges || {};
+      ma.csv_ranges['住居表示'] = { start: headerRow.offset, length: headerRow.length };
+    }
+  }
+  await machiAzaF.truncate(0);
+  await machiAzaF.write(JSON.stringify(maData), 0, 'utf8');
+  await machiAzaF.close();
 
   // const outFilePbf = path.join(outDir, 'ja', outFilename + '.pbf');
   // fs.writeFileSync(outFilePbf, serializeApiDataPbf(apiData));
 
-  console.log(`${outFilename}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字を出力した`);
+  console.log(`${outFilename}-住居表示: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字を出力した`);
 }
 
 async function main(argv: string[]) {
@@ -168,7 +204,7 @@ async function main(argv: string[]) {
       currentRsdtList = [];
     }
     if (lastOutPath !== thisOutPath && lastOutPath !== undefined) {
-      outputRsdtData(outDir, lastOutPath, apiData);
+      await outputRsdtData(outDir, lastOutPath, apiData);
       apiData = [];
     }
     if (lastOutPath !== thisOutPath) {
@@ -192,7 +228,7 @@ async function main(argv: string[]) {
     });
   }
   if (lastOutPath) {
-    outputRsdtData(outDir, lastOutPath, apiData);
+    await outputRsdtData(outDir, lastOutPath, apiData);
   }
 }
 

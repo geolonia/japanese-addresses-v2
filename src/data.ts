@@ -71,6 +71,12 @@ export type SingleMachiAza = {
 
   /// 代表点
   point?: LngLat;
+
+  /// CSV APIに付加情報が存在する場合、この町字のバイト範囲を指定します。
+  csv_ranges?: {
+    ["住居表示"]?: { start: number; length: number; };
+    ["地番"]?: { start: number; length: number; };
+  }
 };
 
 export function machiAzaName(machiAza: SingleMachiAza): string {

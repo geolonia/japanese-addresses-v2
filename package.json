@@ -12,7 +12,7 @@
     "run:all": "npm run run:01_make_prefecture_city && npm run run:02_make_machi_aza && npm run run:03_make_rsdt && npm run run:04_make_chiban",
     "run:01_make_prefecture_city": "tsx ./src/01_make_prefecture_city.ts",
     "run:02_make_machi_aza": "tsx ./src/02_make_machi_aza.ts",
-    "run:03_make_rsdt": "tsx ./src/03_make_rsdt.ts",
+    "run:03_make_rsdt": "node --max-old-space-size=8192 --import tsx ./src/03_make_rsdt.ts",
     "run:04_make_chiban": "node --max-old-space-size=8192 --import tsx ./src/04_make_chiban.ts",
     "create:archive": "rm ./api.7z; 7zz a ./api.7z ./out/api",
     "start": "http-server ./out",
