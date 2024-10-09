@@ -100,6 +100,16 @@ export type SingleRsdt = {
   /// 代表点
   point?: LngLat;
 };
+
+/**
+ * SingleRsdt の街区符号・住居番号・住居番号2を `-` で区切った文字列を返します。
+ * @param rsdt SingleRsdt
+ * @returns string
+ */
+export function rsdtToString(rsdt: SingleRsdt): string {
+  return [rsdt.blk_num, rsdt.rsdt_num, rsdt.rsdt_num2].filter(Boolean).join('-');
+}
+
 /**
  * {市区町村名}-住居表示.json は類似なデータフォーマットを使います。
  * @file api/ja/{都道府県名}/{市区町村名}-住居表示.json
@@ -120,6 +130,13 @@ export type SingleChiban = {
   /// 代表点
   point?: LngLat;
 };
+
+export function chibanToString(chiban: SingleChiban): string {
+  return [chiban.prc_num1, chiban.prc_num2, chiban.prc_num3]
+    .filter(Boolean)
+    .join('-');
+}
+
 /**
  * {市区町村名}-地番.txt は類似なデータフォーマットを使います。
  * @file api/ja/{都道府県名}/{市区町村名}-地番.json
