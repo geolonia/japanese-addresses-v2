@@ -9,8 +9,6 @@
 * 住居表示住所データと対応（番地・号までのデータが含まれる）
 * 地番住所のデータと対応（住居表示住所が導入されていない地域のデータが含まれる）
 
-なお、データ量が多いため `latest.csv` や `latest.db` の提供は見合わせております。
-
 [リリースノート](https://github.com/geolonia/japanese-addresses-v2/releases)
 
 ## API

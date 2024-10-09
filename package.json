@@ -1,13 +1,16 @@
 {
-  "name": "japanese-addresses-v2",
+  "name": "@geolonia/japanese-addresses-v2",
   "type": "module",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "",
   "main": "dist/data.js",
   "types": "dist/data.d.ts",
   "scripts": {
+    "prepack": "npm run clean && npm run build",
+    "clean": "shx rm -rf ./dist",
     "build:proto": "protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=. ./src/address_data.proto",
-    "build": "tsc",
+    "build:dev": "tsc",
+    "build": "tsc -p tsconfig.dist.json",
     "clear:cache": "shx rm -rf ./cache",
     "run:all": "npm run run:01_make_prefecture_city && npm run run:02_make_machi_aza && npm run run:03_make_rsdt && npm run run:04_make_chiban",
     "run:01_make_prefecture_city": "tsx ./src/01_make_prefecture_city.ts",
@@ -21,6 +24,9 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
+  "files": [
+    "dist/**/*"
+  ],
   "devDependencies": {
     "@tsconfig/node22": "^22.0.0",
     "@types/better-sqlite3": "^7.6.11",

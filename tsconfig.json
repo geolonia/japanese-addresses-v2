@@ -4,11 +4,11 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "rootDir": "src",
-    "outDir": "dist",
+    "outDir": "build",
     "types": ["node"],
     "declaration": true
   },
   "filesGlob": ["./src/**/*.ts"],
   "include": ["src/**/*.ts"],
-  "exclude": ["dist", "node_modules"]
+  "exclude": ["dist", "build", "node_modules"]
 }
