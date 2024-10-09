@@ -3,10 +3,12 @@
   "compileOnSave": false,
   "compilerOptions": {
     "lib": ["ESNext"],
+    "module": "commonjs",
+    "moduleResolution": "Classic",
     "rootDir": "src",
-    "outDir": "dist",
+    "outDir": "dist/cjs",
     "types": ["node"],
-    "declaration": true
+    "declaration": false
   },
   "files": [
     "src/data.ts"

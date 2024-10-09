@@ -3,14 +3,19 @@
   "type": "module",
   "version": "0.0.2",
   "description": "",
-  "main": "dist/data.js",
-  "types": "dist/data.d.ts",
+  "exports": {
+    "import": "./dist/esm/data.js",
+    "require": "./dist/cjs/data.js",
+    "types": "./dist/esm/data.d.ts"
+  },
+  "main": "./dist/cjs/data.js",
+  "types": "./dist/esm/data.d.ts",
   "scripts": {
     "prepack": "npm run clean && npm run build",
     "clean": "shx rm -rf ./dist",
     "build:proto": "protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=. ./src/address_data.proto",
     "build:dev": "tsc",
-    "build": "tsc -p tsconfig.dist.json",
+    "build": "tsc -p tsconfig.dist-cjs.json && tsc -p tsconfig.dist-esm.json",
     "clear:cache": "shx rm -rf ./cache",
     "run:all": "npm run run:01_make_prefecture_city && npm run run:02_make_machi_aza && npm run run:03_make_rsdt && npm run run:04_make_chiban",
     "run:01_make_prefecture_city": "tsx ./src/01_make_prefecture_city.ts",
