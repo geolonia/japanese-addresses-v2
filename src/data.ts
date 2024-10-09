@@ -12,6 +12,12 @@ export type SinglePrefecture = {
 
   cities: SingleCity[];
 };
+
+/**
+ * SinglePrefecture から都道府県名を取得します。
+ * @param pref SinglePrefecture
+ * @returns string
+ */
 export function prefectureName(pref: SinglePrefecture): string {
   return pref.pref;
 }
@@ -45,6 +51,11 @@ export type SingleCity = {
   point: LngLat;
 };
 
+/**
+ * SingleCity から市区町村名を取得します。郡名と政令市区名を含めます。
+ * @param city SingleCity
+ * @returns string
+ */
 export function cityName(city: SingleCity): string {
   return `${city.county || ''}${city.city}${city.ward || ''}`;
 }
@@ -79,6 +90,11 @@ export type SingleMachiAza = {
   }
 };
 
+/**
+ * SingleMachiAza から町字名を取得します。大字・丁目・小字を含めます。
+ * @param machiAza SingleMachiAza
+ * @returns string
+ */
 export function machiAzaName(machiAza: SingleMachiAza): string {
   return `${machiAza.oaza_cho || ''}${machiAza.chome || ''}${machiAza.koaza || ''}`;
 }
@@ -131,6 +147,11 @@ export type SingleChiban = {
   point?: LngLat;
 };
 
+/**
+ * SingleChiban の地番1・地番2・地番3を `-` で区切った文字列を返します。
+ * @param chiban SingleChiban
+ * @returns string
+ */
 export function chibanToString(chiban: SingleChiban): string {
   return [chiban.prc_num1, chiban.prc_num2, chiban.prc_num3]
     .filter(Boolean)
