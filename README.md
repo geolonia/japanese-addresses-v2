@@ -1,5 +1,7 @@
 # Geolonia 住所データツール v2
 
+[![NPM Version](https://img.shields.io/npm/v/%40geolonia%2Fjapanese-addresses-v2)](https://www.npmjs.com/package/@geolonia/japanese-addresses-v2)
+
 全国の住所データを HTTP API として公開するためのツールを公開いたします。
 
 本データは、デジタル庁が整備する「[アドレス・ベース・レジストリ](https://www.digital.go.jp/policies/base_registry_address)」を元に加工し、様々なアプリケーションから便利に使えるように整理したものとなります。
