@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { parse as csvParse } from 'csv-parse';
+import { pipeline } from 'node:stream/promises';
 import { cityName, MachiAzaApi, PrefectureApi, prefectureName } from './data.js';
 
 type Stats = {
@@ -10,11 +12,13 @@ type Stats = {
   machiAzaWithRsdtCount: number;
   machiAzaWithChibanAndRsdtCount: number;
   rsdtCount: number;
+  rsdtWithPosCount: number;
   chibanCount: number;
+  chibanWithPosCount: number;
 }
 
-async function getCountForCSVRange(path: string, range?: { start: number, length: number }): Promise<number> {
-  if (!range) { return 0; }
+async function getCountForCSVRange(path: string, range?: { start: number, length: number }): Promise<[number, number]> {
+  if (!range) { return [0, 0]; }
   try {
     const { start, length } = range;
     const fd = await fs.promises.open(path, 'r');
@@ -22,24 +26,24 @@ async function getCountForCSVRange(path: string, range?: { start: number, length
       start,
       end: start + length - 1,
     });
-    let lineCount = 0;
-    stream.on('data', (chunk) => {
-      let idx = -1;
-      lineCount--;
-      do {
-        idx = chunk.indexOf("\n", idx + 1);
-        lineCount++;
-      } while (idx !== -1);
+    const parser = csvParse({
+      columns: true,
+      from_line: 2,
     });
-    await new Promise((resolve, reject) => {
-      stream.on('end', resolve);
-      stream.on('error', reject);
+    let count = 0;
+    let countWithPos = 0;
+    await pipeline(stream, parser, async (source) => {
+      for await (const record of source) {
+        count++;
+        if (record['lng'] && record['lat']) {
+          countWithPos++;
+        }
+      }
     });
-    await fd.close();
-    return lineCount - 3; // remove the two header lines and the trailing newline
+    return [count, countWithPos];
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
-      return 0;
+      return [0, 0];
     }
     throw e;
   }
@@ -59,7 +63,9 @@ async function getCountForCSVRange(path: string, range?: { start: number, length
     machiAzaWithChibanCount: 0,
     machiAzaWithChibanAndRsdtCount: 0,
     rsdtCount: 0,
+    rsdtWithPosCount: 0,
     chibanCount: 0,
+    chibanWithPosCount: 0,
   };
 
   for (const pref of ja.data) {
@@ -81,13 +87,17 @@ async function getCountForCSVRange(path: string, range?: { start: number, length
           stats.machiAzaWithChibanAndRsdtCount++;
         }
 
-        stats.chibanCount += await getCountForCSVRange(path.join(
+        const [ chibanCount, chibanWithPosCount ] = await getCountForCSVRange(path.join(
           dataDir, 'ja', prefectureName(pref), `${cityName(lg)}-地番.txt`
         ), (ma.csv_ranges || {})['地番']);
+        stats.chibanCount += chibanCount;
+        stats.chibanWithPosCount += chibanWithPosCount;
 
-        stats.rsdtCount += await getCountForCSVRange(path.join(
+        const [ rsdtCount, rsdtWithPosCount] = await getCountForCSVRange(path.join(
           dataDir, 'ja', prefectureName(pref), `${cityName(lg)}-住居表示.txt`
         ), (ma.csv_ranges || {})['住居表示']);
+        stats.rsdtCount += rsdtCount;
+        stats.rsdtWithPosCount += rsdtWithPosCount;
       }
     }
   }
