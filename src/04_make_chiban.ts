@@ -146,7 +146,8 @@ async function main(argv: string[]) {
     const chibanDataRef = findResultByTypeAndArea(results, '地番マスター（市区町村）', area);
     const chibanPosDataRef = findResultByTypeAndArea(results, '地番マスター位置参照拡張（市区町村）', area);
     if (!chibanDataRef) {
-      console.error(`Insufficient data found for ${searchQuery} (地番マスター)`)
+      console.error(`Insufficient data found for ${searchQuery} (地番マスター)`);
+      progress.increment();
       continue;
     }
 
