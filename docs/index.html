@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Geolonia japanese-addresses-v2</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+  <script src="https://cdn.geolonia.com/v1/embed?geolonia-api-key=YOUR-API-KEY"></script>
+  <style type="text/css">
+    .hierarchical-list {
+      list-style-type: none;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .hierarchical-list li {
+      position: relative;
+      padding-left: 20px;
+    }
+
+    /* Vertical line connecting parent to child */
+    .hierarchical-list li::before {
+      content: "";
+      position: absolute;
+      top: 12px;
+      left: -10px;
+      border-left: 1px solid #777;
+      height: 100%;
+      width: 1px;
+    }
+
+    /* Horizontal line to connect list item to its parent */
+    .hierarchical-list li::after {
+      content: "";
+      position: absolute;
+      top: 12px;
+      left: -10px;
+      border-top: 1px solid #777;
+      width: 20px;
+    }
+    .hierarchical-list li:last-child::before {
+      content: "";
+      height: 12px;
+    }
+    .hierarchical-list ul {
+      padding-left: 20px;
+      list-style-type: none;
+    }
+    .hierarchical-list ul li::before {
+      top: 0;
+      height: 100%;
+    }
+    .hierarchical-list > li:last-child::before {
+      content: none;
+    }
+
+    .hierarchical-list li span {
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <div class="container" style="margin-top: 80px; border-top: 3px solid #dedede; padding: 8px;">
+    <p style="text-align: center;"><a href="https://github.com/geolonia/japanese-addresses-v2">@geolonia/japanese-addresses-v2</a></p>
+  </div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script type="module">
+    import htm from 'https://unpkg.com/htm@3.1.1/dist/htm.module.js?module';
+    const html = htm.bind(React.createElement);
+    const API_ROOT = 'https://japanese-addresses-v2.geoloniamaps.com/api';
+
+    const toPercent = (num, total) => {
+      return ((num / total) * 100).toFixed(3);
+    };
+
+    const StatsTable = ({ stats }) => {
+      return html`
+        <ul className="hierarchical-list">
+          <li>
+            <strong>都道府県</strong>
+            <span>${stats.prefCount.toLocaleString()}</span>
+          </li>
+          <li>
+            <strong>市区町村</strong>
+            <span>${stats.lgCount.toLocaleString()}</span>
+          </li>
+          <li>
+            <strong>町字・丁目</strong>
+            <span>${stats.machiAzaCount.toLocaleString()}</span>
+            <ul>
+              <li>
+                <strong>住居表示あり</strong>
+                <span>${stats.machiAzaWithRsdtCount.toLocaleString()} (${toPercent(stats.machiAzaWithRsdtCount, stats.machiAzaCount)}%)</span>
+              </li>
+              <li>
+                <strong>地番あり</strong>
+                <span>${stats.machiAzaWithChibanCount.toLocaleString()} (${toPercent(stats.machiAzaWithChibanCount, stats.machiAzaCount)}%)</span>
+              </li>
+              <li>
+                <strong>住居表示と地番両方あり</strong>
+                <span>${stats.machiAzaWithChibanAndRsdtCount.toLocaleString()} (${toPercent(stats.machiAzaWithChibanAndRsdtCount, stats.machiAzaCount)}%)</span>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <strong>住居表示住所</strong>
+            <span>${stats.rsdtCount.toLocaleString()}</span>
+            <ul>
+              <li>
+                <strong>位置情報あり</strong>
+                <span>${stats.rsdtWithPosCount.toLocaleString()} (${toPercent(stats.rsdtWithPosCount, stats.rsdtCount)}%)</span>
+              </li>
+            </ul>
+          </li>
+          <li>
+            <strong>地番住所</strong>
+            <span>${stats.chibanCount.toLocaleString()}</span>
+            <ul>
+              <li>
+                <strong>位置情報あり</strong>
+                <span>${stats.chibanWithPosCount.toLocaleString()} (${toPercent(stats.chibanWithPosCount, stats.chibanCount)}%)</span>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      `;
+    };
+
+    const Stats = ({ updated }) => {
+      const [stats, setStats] = React.useState(null);
+
+      React.useEffect(() => {
+        fetch(`${API_ROOT}/stats.json?v=${updated}`)
+          .then((response) => response.json())
+          .then((data) => {
+            setStats(data);
+          });
+      }, [updated]);
+
+      const updatedFmt = new Date(updated * 1000).toLocaleString();
+
+      return html`
+        <div>
+          <h2>API内容の統計情報</h2>
+          <p>最終更新: ${updatedFmt}</p>
+          ${stats ? html`<${StatsTable} stats=${stats} />` : '読込中...'}
+        </div>
+      `;
+    };
+
+    const App = () => {
+      const [pref, setPref] = React.useState(null);
+      React.useEffect(() => {
+        fetch(`${API_ROOT}/ja.json`)
+          .then((response) => response.json())
+          .then((data) => {
+            setPref(data);
+          });
+      }, []);
+
+      return html`
+        <div class="container mt-4">
+          <h1><code>@geolonia/japanese-addresses-v2</code>について</h1>
+          <p>
+            全国の都道府県、市区町村、町字・丁目、住居表示住所、地番住所のデータを HTTP API として提供しています。このページは、API の内容を確認するためのデモページです。
+          </p>
+          <p>
+            詳しくは、 <a href="https://github.com/geolonia/japanese-addresses-v2">GitHub レポジトリ</a> をご覧ください。
+          </p>
+
+          ${pref ? html`<${Stats} updated=${pref.meta.updated} />` : null}
+        </div>
+      `;
+    }
+
+    ReactDOM.render(html`<${App} />`, document.getElementById("root"));
+  </script>
+</body>
