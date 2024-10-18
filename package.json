@@ -4,18 +4,18 @@
   "version": "0.0.4",
   "description": "",
   "exports": {
-    "import": "./dist/esm/data.js",
-    "require": "./dist/cjs/data.js",
+    "import": "./dist/esm/data.mjs",
+    "require": "./dist/cjs/data.cjs",
     "types": "./dist/esm/data.d.ts"
   },
-  "main": "./dist/cjs/data.js",
+  "main": "./dist/cjs/data.cjs",
   "types": "./dist/esm/data.d.ts",
   "scripts": {
     "prepack": "npm run clean && npm run build",
     "clean": "shx rm -rf ./dist",
     "build:proto": "protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=. ./src/address_data.proto",
     "build:dev": "tsc",
-    "build": "tsc -p tsconfig.dist-cjs.json && tsc -p tsconfig.dist-esm.json",
+    "build": "tsc -p tsconfig.dist-cjs.json && tsc -p tsconfig.dist-esm.json && mv ./dist/cjs/data.js ./dist/cjs/data.cjs && mv ./dist/esm/data.js ./dist/esm/data.mjs",
     "clear:cache": "shx rm -rf ./cache",
     "run:all": "npm run run:01_make_prefecture_city && npm run run:02_make_machi_aza && npm run run:03_make_rsdt && npm run run:04_make_chiban && npm run run:10_refresh_csv_ranges && npm run run:99_create_stats",
     "run:01_make_prefecture_city": "tsx ./src/01_make_prefecture_city.ts",
