@@ -1,7 +1,7 @@
 {
   "name": "@geolonia/japanese-addresses-v2",
   "type": "module",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "",
   "exports": {
     "import": "./dist/esm/data.js",
