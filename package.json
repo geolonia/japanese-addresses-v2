@@ -25,7 +25,7 @@
     "run:10_refresh_csv_ranges": "tsx ./src/10_refresh_csv_ranges.ts",
     "run:99_create_stats": "tsx ./src/99_create_stats.ts",
     "create:archive": "rm ./api.7z; 7zz a ./api.7z ./out/api",
-    "start": "http-server ./out",
+    "start": "http-server --cors=\"*\" ./out",
     "test": "glob -c \"node --test --import tsx\" \"./src/**/*.test.ts\""
   },
   "keywords": [],
