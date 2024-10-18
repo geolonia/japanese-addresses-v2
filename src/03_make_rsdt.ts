@@ -3,12 +3,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getAndParseCSVDataForId, getAndStreamCSVDataForId } from './lib/ckan.js';
-import { mergeRsdtdspRsdtData, RsdtdspRsdtData, RsdtdspRsdtDataWithPos, RsdtdspRsdtPosData } from './lib/ckan_data/rsdtdsp_rsdt.js';
-import { MachiAzaApi, machiAzaName, RsdtApi, SingleRsdt } from './data.js';
+import { mergeRsdtdspRsdtData, RsdtdspRsdtData, RsdtdspRsdtPosData } from './lib/ckan_data/rsdtdsp_rsdt.js';
+import { machiAzaName, RsdtApi, SingleRsdt } from './data.js';
 import { projectABRData } from './lib/proj.js';
 import { MachiAzaData } from './lib/ckan_data/machi_aza.js';
 import { rawToMachiAza } from './02_machi_aza.js';
-import * as AddrData from './address_data.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
 const HEADER_PBF_CHUNK_SIZE = 8_192;
@@ -136,28 +135,13 @@ function serializeApiDataTxt(apiData: RsdtApi): { headerIterations: number, head
 // }
 
 async function outputRsdtData(outDir: string, outFilename: string, apiData: RsdtApi) {
-  const machiAzaJSON = path.join(outDir, 'ja', outFilename + '.json');
+  // const machiAzaJSON = path.join(outDir, 'ja', outFilename + '.json');
   // fs.mkdirSync(path.dirname(machiAzaJSON), { recursive: true });
   // fs.writeFileSync(outFileJSON, JSON.stringify(apiData));
 
   const outFileTXT = path.join(outDir, 'ja', outFilename + '-住居表示.txt');
   const txt = serializeApiDataTxt(apiData);
   await fs.promises.writeFile(outFileTXT, txt.data);
-
-  // update machiAzaJSON
-  const machiAzaF = await fs.promises.open(machiAzaJSON, 'r+');
-  const maData = JSON.parse(await machiAzaF.readFile('utf8')) as MachiAzaApi;
-  maData.meta.updated = Math.floor(Date.now() / 1000);
-  for (const headerRow of txt.headerData) {
-    const ma = maData.data.find((ma) => machiAzaName(ma) === headerRow.name);
-    if (ma) {
-      ma.csv_ranges = ma.csv_ranges || {};
-      ma.csv_ranges['住居表示'] = { start: headerRow.offset, length: headerRow.length };
-    }
-  }
-  await machiAzaF.truncate(0);
-  await machiAzaF.write(JSON.stringify(maData), 0, 'utf8');
-  await machiAzaF.close();
 
   // const outFilePbf = path.join(outDir, 'ja', outFilename + '.pbf');
   // fs.writeFileSync(outFilePbf, serializeApiDataPbf(apiData));

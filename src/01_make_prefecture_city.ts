@@ -56,6 +56,8 @@ async function main(argv: string[]) {
     prefApiData.push({
       code: parseInt(raw.lg_code),
       pref: raw.pref,
+      pref_k: raw.pref_kana,
+      pref_r: raw.pref_roma,
       point: projectABRData(raw),
       cities: [],
     });
@@ -89,8 +91,14 @@ async function main(argv: string[]) {
     apiData.push({
       code: parseInt(raw.lg_code),
       county: raw.county === '' ? undefined : raw.county,
+      county_k: raw.county_kana === '' ? undefined : raw.county_kana,
+      county_r: raw.county_roma === '' ? undefined : raw.county_roma,
       city: raw.city,
+      city_k: raw.city_kana,
+      city_r: raw.city_roma,
       ward: raw.ward === '' ? undefined : raw.ward,
+      ward_k: raw.ward_kana === '' ? undefined : raw.ward_kana,
+      ward_r: raw.ward_roma === '' ? undefined : raw.ward_roma,
       point: projectABRData(raw),
     });
   }

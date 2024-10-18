@@ -6,13 +6,18 @@ import path from 'node:path';
 import cliProgress from 'cli-progress';
 
 import { ckanPackageSearch, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from './lib/ckan.js';
-import { ChibanApi, MachiAzaApi, machiAzaName, SingleChiban } from './data.js';
+import { machiAzaName, SingleChiban, SingleMachiAza } from './data.js';
 import { projectABRData } from './lib/proj.js';
 import { MachiAzaData } from './lib/ckan_data/machi_aza.js';
 import { ChibanData, ChibanPosData } from './lib/ckan_data/chiban.js';
 import { mergeDataLeftJoin } from './lib/ckan_data/index.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
+
+type ChibanApi = {
+  machiAza: SingleMachiAza;
+  chibans: SingleChiban[];
+}[];
 
 type HeaderRow = {
   name: string;
@@ -74,27 +79,12 @@ async function outputChibanData(outDir: string, outFilename: string, apiData: Ch
   if (apiData.length === 0) {
     return;
   }
-  const machiAzaJSON = path.join(outDir, 'ja', outFilename + '.json');
+  // const machiAzaJSON = path.join(outDir, 'ja', outFilename + '.json');
   // await fs.promises.writeFile(outFile, JSON.stringify(apiData, null, 2));
 
   const outFileTXT = path.join(outDir, 'ja', outFilename + '-地番.txt');
   const txt = serializeApiDataTxt(apiData);
   await fs.promises.writeFile(outFileTXT, txt.data);
-
-  // update machiAzaJSON
-  const machiAzaF = await fs.promises.open(machiAzaJSON, 'r+');
-  const maData = JSON.parse(await machiAzaF.readFile('utf8')) as MachiAzaApi;
-  maData.meta.updated = Math.floor(Date.now() / 1000);
-  for (const headerRow of txt.headerData) {
-    const ma = maData.data.find((ma) => machiAzaName(ma) === headerRow.name);
-    if (ma) {
-      ma.csv_ranges = ma.csv_ranges || {};
-      ma.csv_ranges['地番'] = { start: headerRow.offset, length: headerRow.length };
-    }
-  }
-  await machiAzaF.truncate(0);
-  await machiAzaF.write(JSON.stringify(maData), 0, 'utf8');
-  await machiAzaF.close();
 
   console.log(`${outFilename}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字の地番を出力した`);
 }
