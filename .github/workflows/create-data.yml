@@ -58,6 +58,15 @@ jobs:
         run: |
           ./deploy/01_sync_to_s3.sh
 
+  clear-cdn-cache:
+    needs:
+      - create-data
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Clear Cloudflare cache
         env:
           CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
