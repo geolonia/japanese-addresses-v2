@@ -58,9 +58,9 @@ jobs:
         run: |
           ./deploy/01_sync_to_s3.sh
 
-      - name: Purge Cloudflare cache
+      - name: Clear Cloudflare cache
         env:
           CLOUDFLARE_ZONE_ID: ${{ vars.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
         run: |
-          ./deploy/02_purge_cloudflare_cache.sh
+          ./deploy/02_clear_cloudflare_cache.sh
