@@ -91,6 +91,17 @@ $ npm run run:03_make_rsdt # 住居表示住所API作成 (町字APIが先に作�
 $ npm run run:04_make_chiban # 地番住所API作成 (町字APIが先に作らないとエラーになります)
 ```
 
+TARファイルに丸める場合は
+
+```shell
+VERSION="$(date -u '+%4Y%m%d%H%M%S')"
+cd ./out
+tar -cf "api-$VERSION.tar" ./api
+zstd -T0 -19 -z "api-$VERSION.tar"
+```
+
+`deploy/01a_create_archive.sh` を参照してください
+
 ### API の構成
 
 ```shell

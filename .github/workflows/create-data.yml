@@ -58,6 +58,15 @@ jobs:
         run: |
           ./deploy/01_sync_to_s3.sh
 
+      - name: Create archive
+        run: |
+          ./deploy/01a_create_archive.sh
+
+      - name: Upload archive to S3
+        run: |
+          aws s3 cp \
+            ./out/api.tar.zst s3://japanese-addresses-v2.geoloniamaps.com/experimental/api.tar.zst
+
   clear-cdn-cache:
     needs:
       - create-data
