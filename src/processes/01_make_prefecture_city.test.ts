@@ -14,7 +14,7 @@ test.describe('with Hokkaido filter', async () => {
   });
 
   test('it generates the API', async () => {
-    await fs.rm('./out/api_hokkaido', { recursive: true });
+    await fs.rm('./out/api_hokkaido', { recursive: true, force: true });
     await main(['', '', './out/api_hokkaido']);
     assert.ok(true);
 
