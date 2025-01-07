@@ -84,13 +84,14 @@ async function outputChibanData(outDir: string, outFilename: string, apiData: Ch
 
   const outFileTXT = path.join(outDir, 'ja', outFilename + '-地番.txt');
   const txt = serializeApiDataTxt(apiData);
+  await fs.promises.mkdir(path.dirname(outFileTXT), { recursive: true });
   await fs.promises.writeFile(outFileTXT, txt.data);
 
   console.log(`${outFilename}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字の地番を出力した`);
 }
 
 async function main(argv: string[]) {
-  const outDir = argv[2] || path.join(import.meta.dirname, '..', 'out', 'api');
+  const outDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
   console.log('事前準備: 町字データを取得中...');
@@ -108,7 +109,7 @@ async function main(argv: string[]) {
   }
   console.log('事前準備: 町字データを取得しました');
 
-  const progressInst = new cliProgress.MultiBar({
+  const progress = new cliProgress.SingleBar({
     format: ' {bar} {percentage}% | ETA: {eta_formatted} | {value}/{total}',
     barCompleteChar: '\u2588',
     barIncompleteChar: '\u2591',
@@ -117,80 +118,84 @@ async function main(argv: string[]) {
     // No-TTY output is required for CI/CD environments
     noTTYOutput: true,
   });
-  const progress = progressInst.create(machiAzas.length, 0);
+  progress.start(machiAzas.length, 0);
+  try {
 
-  let currentLgCode: string | undefined = undefined;
-  for (const ma of machiAzas) {
-    if (currentLgCode && ma.lg_code === currentLgCode) {
-      // we have already processed this lg_code, so we can skip it
-      continue;
-    } else if (currentLgCode !== ma.lg_code) {
-      currentLgCode = ma.lg_code;
-    }
-    let area = `${ma.pref} ${ma.county}${ma.city}`;
-    if (ma.ward !== '') {
-      area += ` ${ma.ward}`;
-    }
-    let searchQuery = `${area} 地番マスター`;
-    const results = await ckanPackageSearch(searchQuery);
-    const chibanDataRef = findResultByTypeAndArea(results, '地番マスター（市区町村）', area);
-    const chibanPosDataRef = findResultByTypeAndArea(results, '地番マスター位置参照拡張（市区町村）', area);
-    if (!chibanDataRef) {
-      console.error(`Insufficient data found for ${searchQuery} (地番マスター)`);
-      progress.increment();
-      continue;
-    }
-
-    const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.name);
-    const posStream = chibanPosDataRef ?
-      getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.name)
-      :
-      // 位置参照拡張データが無い場合もある
-      (async function*() {})();
-
-    const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id', 'prc_id'], true);
-    // console.log(`処理: ${ma.pref} ${ma.county}${ma.city} ${ma.ward} の地番データを処理中...`);
-
-    let currentMachiAza: MachiAzaData | undefined = undefined;
-    const apiData: ChibanApi = [];
-    let currentChibanList: SingleChiban[] = [];
-    for await (const raw of rawData) {
-      let ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
-      if (!ma) {
+    let currentLgCode: string | undefined = undefined;
+    for (const ma of machiAzas) {
+      if (currentLgCode && ma.lg_code === currentLgCode) {
+        // we have already processed this lg_code, so we can skip it
+        progress.increment();
+        continue;
+      } else if (currentLgCode !== ma.lg_code) {
+        currentLgCode = ma.lg_code;
+      }
+      let area = `${ma.pref} ${ma.county}${ma.city}`;
+      if (ma.ward !== '') {
+        area += ` ${ma.ward}`;
+      }
+      let searchQuery = `${area} 地番マスター`;
+      const results = await ckanPackageSearch(searchQuery);
+      const chibanDataRef = findResultByTypeAndArea(results, '地番マスター（市区町村）', area);
+      const chibanPosDataRef = findResultByTypeAndArea(results, '地番マスター位置参照拡張（市区町村）', area);
+      if (!chibanDataRef) {
+        console.error(`Insufficient data found for ${searchQuery} (地番マスター)`);
+        progress.increment();
         continue;
       }
-      if (currentMachiAza && (currentMachiAza.machiaza_id !== ma.machiaza_id || currentMachiAza.lg_code !== ma.lg_code)) {
+
+      const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.name);
+      const posStream = chibanPosDataRef ?
+        getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.name)
+        :
+        // 位置参照拡張データが無い場合もある
+        (async function*() {})();
+
+      const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id', 'prc_id'], true);
+      // console.log(`処理: ${ma.pref} ${ma.county}${ma.city} ${ma.ward} の地番データを処理中...`);
+
+      let currentMachiAza: MachiAzaData | undefined = undefined;
+      const apiData: ChibanApi = [];
+      let currentChibanList: SingleChiban[] = [];
+      for await (const raw of rawData) {
+        let ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
+        if (!ma) {
+          continue;
+        }
+        if (currentMachiAza && (currentMachiAza.machiaza_id !== ma.machiaza_id || currentMachiAza.lg_code !== ma.lg_code)) {
+          apiData.push({
+            machiAza: currentMachiAza,
+            chibans: currentChibanList,
+          });
+          currentChibanList = [];
+          currentMachiAza = ma;
+        }
+        if (!currentMachiAza) {
+          currentMachiAza = ma;
+        }
+
+        currentChibanList.push({
+          prc_num1: raw.prc_num1,
+          prc_num2: raw.prc_num2 !== '' ? raw.prc_num2 : undefined,
+          prc_num3: raw.prc_num3 !== '' ? raw.prc_num3 : undefined,
+          point: 'rep_srid' in raw ? projectABRData(raw) : undefined,
+        });
+      }
+      if (currentMachiAza && currentChibanList.length > 0) {
         apiData.push({
           machiAza: currentMachiAza,
           chibans: currentChibanList,
         });
-        currentChibanList = [];
-        currentMachiAza = ma;
       }
-      if (!currentMachiAza) {
-        currentMachiAza = ma;
-      }
-
-      currentChibanList.push({
-        prc_num1: raw.prc_num1,
-        prc_num2: raw.prc_num2 !== '' ? raw.prc_num2 : undefined,
-        prc_num3: raw.prc_num3 !== '' ? raw.prc_num3 : undefined,
-        point: 'rep_srid' in raw ? projectABRData(raw) : undefined,
-      });
+      await outputChibanData(outDir, path.join(
+        ma.pref,
+        `${ma.county}${ma.city}${ma.ward}`,
+      ), apiData);
+      progress.increment();
     }
-    if (currentMachiAza && currentChibanList.length > 0) {
-      apiData.push({
-        machiAza: currentMachiAza,
-        chibans: currentChibanList,
-      });
-    }
-    await outputChibanData(outDir, path.join(
-      ma.pref,
-      `${ma.county}${ma.city}${ma.ward}`,
-    ), apiData);
-    progress.increment();
+  } finally {
+    progress.stop();
   }
-  progress.stop();
 }
 
 export default main;

@@ -139,6 +139,7 @@ async function outputRsdtData(outDir: string, outFilename: string, apiData: Rsdt
 
   const outFileTXT = path.join(outDir, 'ja', outFilename + '-住居表示.txt');
   const txt = serializeApiDataTxt(apiData);
+  await fs.promises.mkdir(path.dirname(outFileTXT), { recursive: true });
   await fs.promises.writeFile(outFileTXT, txt.data);
 
   // const outFilePbf = path.join(outDir, 'ja', outFilename + '.pbf');
@@ -148,7 +149,7 @@ async function outputRsdtData(outDir: string, outFilename: string, apiData: Rsdt
 }
 
 async function main(argv: string[]) {
-  const outDir = argv[2] || path.join(import.meta.dirname, '..', 'out', 'api');
+  const outDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
   const machiAzaData = await getAndParseCSVDataForId<MachiAzaData>('ba-o1-000000_g2-000003'); // 市区町村 & 町字

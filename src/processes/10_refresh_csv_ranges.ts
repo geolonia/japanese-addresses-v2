@@ -35,7 +35,7 @@ function readUntilHeaderEnd(path: string): Promise<Buffer> {
   });
 }
 
-async function getRangesFromCSV(path: string): Promise<undefined | HeaderRow[]> {
+export async function getRangesFromCSV(path: string): Promise<undefined | HeaderRow[]> {
   try {
     const headerData = await readUntilHeaderEnd(path);
     const headerStream = csvParse(headerData);
@@ -61,11 +61,11 @@ async function getRangesFromCSV(path: string): Promise<undefined | HeaderRow[]> 
 }
 
 async function main(argv: string[]) {
-  const apiDir = argv[2] || path.join(import.meta.dirname, '..', 'out', 'api');
+  const apiDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   const jaFile = path.join(apiDir, 'ja.json');
   const api = JSON.parse(fs.readFileSync(jaFile, 'utf-8')) as PrefectureApi;
 
-  const progressInst = new cliProgress.MultiBar({
+  const progress = new cliProgress.SingleBar({
     format: ' {bar} {percentage}% | ETA: {eta_formatted} | {value}/{total}',
     barCompleteChar: '\u2588',
     barIncompleteChar: '\u2591',
@@ -82,45 +82,46 @@ async function main(argv: string[]) {
     }
   }
 
-  const progress = progressInst.create(flatCities.length, 0);
+  progress.start(flatCities.length, 0);
+  try {
+    for (const [pref, city] of flatCities) {
+      const cityPrefix = path.join(apiDir, 'ja', prefectureName(pref), cityName(city));
+      const [
+        chibanHeader,
+        rsdtHeader,
+      ] = await Promise.all([
+        getRangesFromCSV(`${cityPrefix}-地番.txt`),
+        getRangesFromCSV(`${cityPrefix}-住居表示.txt`),
+      ]);
 
-  for (const [pref, city] of flatCities) {
-    const cityPrefix = path.join(apiDir, 'ja', prefectureName(pref), cityName(city));
-    const [
-      chibanHeader,
-      rsdtHeader,
-    ] = await Promise.all([
-      getRangesFromCSV(`${cityPrefix}-地番.txt`),
-      getRangesFromCSV(`${cityPrefix}-住居表示.txt`),
-    ]);
+      if (!chibanHeader && !rsdtHeader) {
+        progress.increment();
+        continue;
+      }
 
-    if (!chibanHeader && !rsdtHeader) {
+      const maData = JSON.parse(await fs.promises.readFile(`${cityPrefix}.json`, 'utf8')) as MachiAzaApi;
+      for (const headerRow of chibanHeader || []) {
+        const ma = maData.data.find((ma) => machiAzaName(ma) === headerRow.name);
+        if (ma) {
+          ma.csv_ranges = ma.csv_ranges || {};
+          ma.csv_ranges['地番'] = { start: headerRow.offset, length: headerRow.length };
+        }
+      }
+      for (const headerRow of rsdtHeader || []) {
+        const ma = maData.data.find((ma) => machiAzaName(ma) === headerRow.name);
+        if (ma) {
+          ma.csv_ranges = ma.csv_ranges || {};
+          ma.csv_ranges['住居表示'] = { start: headerRow.offset, length: headerRow.length };
+        }
+      }
+
+      await fs.promises.writeFile(`${cityPrefix}.json`, JSON.stringify(maData));
+
       progress.increment();
-      continue;
     }
-
-    const maData = JSON.parse(await fs.promises.readFile(`${cityPrefix}.json`, 'utf8')) as MachiAzaApi;
-    for (const headerRow of chibanHeader || []) {
-      const ma = maData.data.find((ma) => machiAzaName(ma) === headerRow.name);
-      if (ma) {
-        ma.csv_ranges = ma.csv_ranges || {};
-        ma.csv_ranges['地番'] = { start: headerRow.offset, length: headerRow.length };
-      }
-    }
-    for (const headerRow of rsdtHeader || []) {
-      const ma = maData.data.find((ma) => machiAzaName(ma) === headerRow.name);
-      if (ma) {
-        ma.csv_ranges = ma.csv_ranges || {};
-        ma.csv_ranges['住居表示'] = { start: headerRow.offset, length: headerRow.length };
-      }
-    }
-
-    await fs.promises.writeFile(`${cityPrefix}.json`, JSON.stringify(maData));
-
-    progress.increment();
+  } finally {
+    progress.stop();
   }
-
-  progress.stop();
 }
 
 export default main;

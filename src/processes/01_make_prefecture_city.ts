@@ -29,7 +29,7 @@ async function outputCityData(outDir: string, prefName: string, apiData: CityApi
 
 async function main(argv: string[]) {
   const updated = Math.floor(Date.now() / 1000);
-  const outDir = argv[2] || path.join(import.meta.dirname, '..', 'out', 'api');
+  const outDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
   const [

@@ -49,8 +49,8 @@ async function getCountForCSVRange(path: string, range?: { start: number, length
   }
 }
 
-async function main() {
-  const dataDir = path.join(import.meta.dirname, '..', 'out', 'api');
+async function main(argv: string[]) {
+  const dataDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
 
   const jaJSON = await fs.promises.readFile(path.join(dataDir, 'ja.json'), 'utf8');
   const ja = JSON.parse(jaJSON) as PrefectureApi;
