@@ -6,6 +6,7 @@ import { parse as csvParse } from 'csv-parse';
 import { fetch } from 'undici';
 import { unzipAndExtractZipFile } from './zip_tools.js';
 import { getDownloadStream } from './fetch_tools.js';
+import { lgCodeMatch, loadSettings } from './settings.js';
 
 const CKAN_BASE_REGISTRY_URL = `https://catalog.registries.digital.go.jp/rc`
 const USER_AGENT = 'curl/8.7.1';
@@ -135,7 +136,12 @@ export async function *getAndStreamCSVDataForId<T = Record<string, string>>(id: 
   if (!url) {
     throw new Error('No CSV resource found');
   }
-  yield *downloadAndExtract(url);
+  const settings = await loadSettings();
+  for await (const record of downloadAndExtract<T>(url)) {
+    const lgCode = (record as {'lg_code': string})['lg_code'];
+    if (!lgCodeMatch(settings, lgCode)) { continue; }
+    yield record;
+  }
 }
 
 export async function getAndParseCSVDataForId<T = Record<string, string>>(id: string): Promise<T[]> {
