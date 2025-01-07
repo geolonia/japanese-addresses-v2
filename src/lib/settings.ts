@@ -77,6 +77,15 @@ export function lgCodeMatch(settings: ParsedSettings, lgCode: string): boolean {
     if (re.test(lgCode)) {
       return true;
     }
+
+    // re が市区町村まで指定されている場合は、都道府県全体に対してマッチする
+    const cityCodeMatch = re.source.match(/^\^?(\d{2})\d{3}/);
+    if (cityCodeMatch) {
+      const prefCode = cityCodeMatch[1];
+      if (lgCode.startsWith(prefCode + '000')) {
+        return true;
+      }
+    }
   }
   return false;
 }

@@ -18,15 +18,15 @@ after(async () => {
   delete process.env.SETTINGS_PATH;
 });
 
-describe('settings', () => {
-  test('loadSettings', async () => {
-    const parsedSettings = await settings.loadSettings();
-    assert.equal(parsedSettings.lgCodes.length, 1);
-    assert.ok(parsedSettings.lgCodes[0].test('011002'));
-    assert.ok(!parsedSettings.lgCodes[0].test('131002'));
-  });
+test('loadSettings', async () => {
+  const parsedSettings = await settings.loadSettings();
+  assert.equal(parsedSettings.lgCodes.length, 1);
+  assert.ok(parsedSettings.lgCodes[0].test('011002'));
+  assert.ok(!parsedSettings.lgCodes[0].test('131002'));
+});
 
-  test('lgCodeMatch', () => {
+describe('lgCodeMatch', () => {
+  test('basic settings', () => {
     const settingsData = settings.parseSettings({
       lgCodes: ['^01', '^13', '472018'],
     });
@@ -36,10 +36,24 @@ describe('settings', () => {
     assert.ok(settings.lgCodeMatch(settingsData, '472018'));
   });
 
-  test('loadSettings with overwritten JSON', async () => {
-    process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['^99'] });
-    const parsedSettings = await settings.loadSettings();
-    assert.equal(parsedSettings.lgCodes.length, 1);
-    assert.ok(parsedSettings.lgCodes[0].test('990000'));
+  test('市区町村まで指定されているときは、都道府県全体に対してマッチする', () => {
+    const settingsData = settings.parseSettings({
+      lgCodes: ['131002', '472018'],
+    });
+    assert.ok(settings.lgCodeMatch(settingsData, '131002'));
+    assert.ok(settings.lgCodeMatch(settingsData, '130001'));
+
+    assert.ok(settings.lgCodeMatch(settingsData, '472018'));
+    assert.ok(settings.lgCodeMatch(settingsData, '470007'));
+
+    assert.ok(!settings.lgCodeMatch(settingsData, '011002'));
+    assert.ok(!settings.lgCodeMatch(settingsData, '460001'));
   });
+});
+
+test('loadSettings with overwritten JSON', async () => {
+  process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['^99'] });
+  const parsedSettings = await settings.loadSettings();
+  assert.equal(parsedSettings.lgCodes.length, 1);
+  assert.ok(parsedSettings.lgCodes[0].test('990000'));
 });
