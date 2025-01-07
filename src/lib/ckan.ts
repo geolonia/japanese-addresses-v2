@@ -107,6 +107,12 @@ export function getUrlForCSVResource(res: CKANPackageSearchResult): string | und
 
 export type CSVParserIterator<T> = AsyncIterableIterator<T>;
 
+export async function *combineCSVParserIterators<T>(...iterators: CSVParserIterator<T>[]): CSVParserIterator<T> {
+  for (const i of iterators) {
+    yield* i;
+  }
+}
+
 export async function *downloadAndExtract<T>(url: string): CSVParserIterator<T> {
   const bodyStream = await getDownloadStream(url);
   const fileEntries = unzipAndExtractZipFile(bodyStream);

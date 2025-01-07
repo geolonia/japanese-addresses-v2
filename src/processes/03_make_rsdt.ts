@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/ckan.js';
+import { ckanPackageSearch, combineCSVParserIterators, CSVParserIterator, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/ckan.js';
 import { mergeRsdtdspRsdtData, RsdtdspRsdtData, RsdtdspRsdtPosData } from '../lib/ckan_data/rsdtdsp_rsdt.js';
 import { machiAzaName, RsdtApi, SingleRsdt } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
 import { MachiAzaData } from '../lib/ckan_data/machi_aza.js';
 import { rawToMachiAza } from './02_machi_aza.js';
+import { loadSettings } from '../lib/settings.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
 const HEADER_PBF_CHUNK_SIZE = 8_192;
@@ -161,8 +162,40 @@ async function main(argv: string[]) {
   // 鹿児島県
   // const mainStream = getAndStreamCSVDataForId<RsdtdspRsdtData>('ba-o1-460001_g2-000005');
   // const posStream = getAndStreamCSVDataForId<RsdtdspRsdtPosData>('ba-o1-460001_g2-000008');
-  const mainStream = getAndStreamCSVDataForId<RsdtdspRsdtData>('ba000003');
-  const posStream = getAndStreamCSVDataForId<RsdtdspRsdtPosData>('ba000006');
+
+  const hasFilter = (await loadSettings()).lgCodes.length > 0;
+
+  let mainStream: CSVParserIterator<RsdtdspRsdtData>;
+  let posStream: CSVParserIterator<RsdtdspRsdtPosData>;
+  if (!hasFilter) {
+    mainStream = getAndStreamCSVDataForId<RsdtdspRsdtData>('ba000003');
+    posStream = getAndStreamCSVDataForId<RsdtdspRsdtPosData>('ba000006');
+  } else {
+    // machiAzaData が既にフィルターされているので、そこからユニークな都道府県のみ抽出し、そのストリームのみ読み込むようにする
+    const prefs = new Set(machiAzaData.map((ma) => ma.pref));
+
+    const mainStreams: CSVParserIterator<RsdtdspRsdtData>[] = [];
+    const posStreams: CSVParserIterator<RsdtdspRsdtPosData>[] = [];
+    for (const pref of prefs) {
+      let mainSearchQuery = `${pref} 住居表示-住居マスター データセット`;
+      const mainResults = await ckanPackageSearch(mainSearchQuery);
+      const main = findResultByTypeAndArea(mainResults, '住居表示-住居マスター（都道府県）', pref);
+      if (!main) {
+        throw new Error(`「${pref}」の住居表示-住居マスター データセットが見つかりませんでした`);
+      }
+      mainStreams.push(getAndStreamCSVDataForId<RsdtdspRsdtData>(main.id));
+
+      let posSearchQuery = `${pref} 住居表示-住居マスター位置参照拡張 データセット`;
+      const posResults = await ckanPackageSearch(posSearchQuery);
+      const pos = findResultByTypeAndArea(posResults, '住居表示-住居マスター位置参照拡張（都道府県）', pref);
+      if (!pos) {
+        throw new Error(`「${pref}」の住居表示-住居マスター位置参照拡張 データセットが見つかりませんでした`);
+      }
+      posStreams.push(getAndStreamCSVDataForId<RsdtdspRsdtPosData>(pos.id));
+    }
+    mainStream = combineCSVParserIterators(...mainStreams);
+    posStream = combineCSVParserIterators(...posStreams);
+  }
   const rawData = mergeRsdtdspRsdtData(mainStream, posStream);
 
   let lastOutPath: string | undefined = undefined;
