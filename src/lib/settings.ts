@@ -23,6 +23,8 @@ type Settings = {
   lgCodes?: string[];
 }
 
+const DEFAULT_SETTINGS: Settings = {};
+
 // ---
 
 async function loadRawSettings(input: string): Promise<Settings> {
@@ -30,8 +32,15 @@ async function loadRawSettings(input: string): Promise<Settings> {
     return JSON.parse(input.slice(5));
   }
 
-  const settings = await fs.readFile(input, "utf-8");
-  return JSON.parse(settings);
+  try {
+    const settingsData = await fs.readFile(input, "utf-8");
+    return JSON.parse(settingsData);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+      return DEFAULT_SETTINGS;
+    }
+    throw e;
+  }
 }
 
 export function parseSettings(settings: Settings): ParsedSettings {

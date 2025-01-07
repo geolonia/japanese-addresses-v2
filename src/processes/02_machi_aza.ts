@@ -1,6 +1,6 @@
-import { SingleMachiAza } from "./data.js";
-import { MachiAzaData, MachiAzaPosData } from "./lib/ckan_data/machi_aza.js";
-import { projectABRData } from "./lib/proj.js";
+import { SingleMachiAza } from "../data.js";
+import { MachiAzaData, MachiAzaPosData } from "../lib/ckan_data/machi_aza.js";
+import { projectABRData } from "../lib/proj.js";
 
 export function rawToMachiAza(raw: MachiAzaData | (MachiAzaData & MachiAzaPosData)): SingleMachiAza {
   return {
