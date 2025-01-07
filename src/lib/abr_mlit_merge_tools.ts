@@ -9,9 +9,11 @@ export function createMergedApiData(abrData: SingleMachiAza[], mlitData: NlftpMl
   const out = abrData;
 
   for (const row of mlitData) {
+    // ABRデータに重複があるかのチェック
     if (abrData.find(a => (
-      (a.oaza_cho === row.oaza_cho && a.chome === row.chome) ||
-      a.koaza === row.oaza_cho
+      (a.oaza_cho === row.oaza_cho && a.chome === row.chome) || // 大字と丁目が一致する場合
+      (a.koaza === row.oaza_cho) || // 小字が一致する場合
+      ((a.oaza_cho || '') + (a.koaza || '') === row.oaza_cho) // 大字と小字を結合したものが一致する場合
     ))) {
       continue;
     }
