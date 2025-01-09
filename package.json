@@ -26,6 +26,7 @@
     "run:99_create_stats": "tsx ./src/99_create_stats.ts",
     "create:archive": "rm ./api.7z; 7zz a ./api.7z ./out/api",
     "start": "http-server --cors=\"*\" ./out",
+    "lint": "eslint ./src",
     "test": "glob -c \"node --test --import tsx\" \"./src/**/*.test.ts\""
   },
   "keywords": [],

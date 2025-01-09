@@ -40,7 +40,8 @@ export async function getRangesFromCSV(path: string): Promise<undefined | Header
     const headerData = await readUntilHeaderEnd(path);
     const headerStream = csvParse(headerData);
     const rows: HeaderRow[] = [];
-    for await (const line of headerStream) {
+    for await (const line_ of headerStream) {
+      const line = line_ as [string, string, string];
       if (line[0] === '=END=') {
         break;
       }

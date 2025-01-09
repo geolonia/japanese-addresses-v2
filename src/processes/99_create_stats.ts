@@ -32,7 +32,7 @@ async function getCountForCSVRange(path: string, range?: { start: number, length
     });
     let count = 0;
     let countWithPos = 0;
-    await pipeline(stream, parser, async (source) => {
+    await pipeline(stream, parser, async (source: AsyncIterable<{lat?: string, lng?: string}>) => {
       for await (const record of source) {
         count++;
         if (record['lng'] && record['lat']) {

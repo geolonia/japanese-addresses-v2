@@ -12,12 +12,17 @@ const CKAN_BASE_REGISTRY_URL = `https://catalog.registries.digital.go.jp/rc`
 const USER_AGENT = 'curl/8.7.1';
 const CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
 
-export type CKANResponse<T = any> = {
+export type CKANResponse<T = CKANResponseInner> = {
   success: false
 } | {
   success: true
   result: T
 }
+
+type CKANResponseInner = (
+  CKANPackageSearchResultList |
+  CKANPackageSearchResult
+);
 
 export type CKANPackageSearchResultList = {
   count: number,
@@ -53,7 +58,8 @@ export async function ckanPackageSearch(query: string): Promise<CKANPackageSearc
 
   let json: CKANResponse<CKANPackageSearchResultList>;
   if (fs.existsSync(cacheFile)) {
-    json = await fs.promises.readFile(cacheFile, 'utf-8').then((data) => JSON.parse(data));
+    json = await fs.promises.readFile(cacheFile, 'utf-8')
+      .then((data) => JSON.parse(data) as CKANResponse<CKANPackageSearchResultList>);
   } else {
     const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_search`);
     url.searchParams.set('q', query);
@@ -81,7 +87,8 @@ export async function getCkanPackageById(id: string): Promise<CKANPackageSearchR
 
   let json: CKANResponse<CKANPackageSearchResult>;
   if (fs.existsSync(cacheFile)) {
-    json = await fs.promises.readFile(cacheFile, 'utf-8').then((data) => JSON.parse(data));
+    json = await fs.promises.readFile(cacheFile, 'utf-8')
+      .then((data) => JSON.parse(data) as CKANResponse<CKANPackageSearchResult>);
   } else {
     const url = new URL(`${CKAN_BASE_REGISTRY_URL}/api/3/action/package_show`);
     url.searchParams.set('id', id);

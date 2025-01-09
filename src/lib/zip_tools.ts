@@ -7,7 +7,8 @@ import unzipper, { Entry } from 'unzipper';
  */
 export async function *unzipAndExtractZipFile(zipFile: Readable): AsyncGenerator<Entry> {
   const files = zipFile.pipe(unzipper.Parse({forceStream: true}));
-  for await (const entry of files) {
+  for await (const entry_ of files) {
+    const entry = entry_ as Entry;
     if (entry.type === 'File' && entry.path.endsWith('.zip')) {
       yield *unzipAndExtractZipFile(entry);
     } else if (entry.type === 'File' && entry.path.endsWith('.csv')) {
