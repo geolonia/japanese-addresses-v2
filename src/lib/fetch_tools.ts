@@ -1,6 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 import { fetch } from 'undici';
 
@@ -11,11 +12,7 @@ export async function getDownloadStream(url: string): Promise<Readable> {
   const cacheKey = url.replace(/[^a-zA-Z0-9]/g, '_');
   const cacheFile = path.join(CACHE_DIR, 'files', cacheKey);
 
-  let bodyStream: Readable;
-  if (fs.existsSync(cacheFile)) {
-    // console.log(`${cacheFile} found in cache`);
-    bodyStream = fs.createReadStream(cacheFile);
-  } else {
+  if (!fs.existsSync(cacheFile)) {
     // console.log(`Downloading ${url}`);
     const res = await fetch(url, {
       headers: {
@@ -31,13 +28,11 @@ export async function getDownloadStream(url: string): Promise<Readable> {
       throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }
 
-    const [bodyA, bodyB] = body.tee();
-    bodyStream = Readable.fromWeb(bodyA);
-
     await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
-    const cacheStream = fs.createWriteStream(cacheFile);
-    Readable.fromWeb(bodyB).pipe(cacheStream);
+    await pipeline(body, fs.createWriteStream(cacheFile));
   }
+
+  const bodyStream = fs.createReadStream(cacheFile);
 
   return bodyStream;
 }
