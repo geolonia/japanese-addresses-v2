@@ -4,7 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function _createKey(data: any, keys: string[]): string {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   return keys.map((key) => `${data[key]}`).join("|");
 }
 
@@ -34,12 +36,12 @@ export async function *mergeDataLeftJoin<T, U>(left: AsyncIterableIterator<T>, r
   const stmt2 = db.prepare("INSERT INTO r VALUES (?, ?)");
 
   await Promise.all([
-    pipeline(left, async function *(source) {
+    pipeline(left, async function (source) {
       for await (const data of source) {
         stmt1.run(_createKey(data, keys), JSON.stringify(data));
       }
     }),
-    pipeline(right, async function *(source) {
+    pipeline(right, async function (source) {
       for await (const data of source) {
         stmt2.run(_createKey(data, keys), JSON.stringify(data));
       }

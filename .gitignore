@@ -6,5 +6,6 @@ cache
 .envrc
 *.0x
 *.7z
+/settings.json
 explorer
 geolonia-japanese-addresses-v2-*.tgz
