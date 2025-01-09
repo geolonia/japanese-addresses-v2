@@ -125,7 +125,7 @@ export async function *downloadAndExtract<T>(url: string): CSVParserIterator<T> 
       const record = r as string[];
       // save header
       if (typeof header === 'undefined') {
-        header = record as string[];
+        header = record;
         continue;
       }
       yield record.reduce<Record<string, string>>((acc, value, index) => {

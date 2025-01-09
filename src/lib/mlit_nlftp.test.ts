@@ -5,8 +5,8 @@ import {
   downloadAndExtractNlftpMlitFile,
 } from './mlit_nlftp.js';
 
-test.describe('downloadAndExtractNlftpMlitFile', () => {
-  test('it works', async () => {
+await test.describe('downloadAndExtractNlftpMlitFile', async () => {
+  await test('it works', async () => {
     // 沖縄県
     const data = await downloadAndExtractNlftpMlitFile('47');
     assert.strictEqual(data.length, 1228);

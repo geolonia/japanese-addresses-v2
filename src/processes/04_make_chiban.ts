@@ -26,7 +26,7 @@ type HeaderRow = {
 }
 
 function serializeApiDataTxt(apiData: ChibanApi): { headerIterations: number, headerData: HeaderRow[], data: Buffer } {
-  let outSections: Buffer[] = [];
+  const outSections: Buffer[] = [];
   for ( const { machiAza, chibans } of apiData ) {
     let outSection = `地番,${machiAzaName(machiAza)}\n` +
                      `prc_num1,prc_num2,prc_num3,lng,lat\n`;
@@ -134,7 +134,7 @@ async function main(argv: string[]) {
       if (ma.ward !== '') {
         area += ` ${ma.ward}`;
       }
-      let searchQuery = `${area} 地番マスター`;
+      const searchQuery = `${area} 地番マスター`;
       const results = await ckanPackageSearch(searchQuery);
       const chibanDataRef = findResultByTypeAndArea(results, '地番マスター（市区町村）', area);
       const chibanPosDataRef = findResultByTypeAndArea(results, '地番マスター位置参照拡張（市区町村）', area);
@@ -158,7 +158,7 @@ async function main(argv: string[]) {
       const apiData: ChibanApi = [];
       let currentChibanList: SingleChiban[] = [];
       for await (const raw of rawData) {
-        let ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
+        const ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
         if (!ma) {
           continue;
         }

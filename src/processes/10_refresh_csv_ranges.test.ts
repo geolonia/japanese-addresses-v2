@@ -11,16 +11,16 @@ import mainChiban from './04_make_chiban.js';
 import main from './10_refresh_csv_ranges.js'
 import { MachiAzaApi } from '../data.js';
 
-test.describe('with filter for 302015 (和歌山県和歌山市)', async () => {
-  test.before(async () => {
+await test.describe('with filter for 302015 (和歌山県和歌山市)', async () => {
+  test.before(() => {
     process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['302015'] });
   });
 
-  test.after(async () => {
+  test.after(() => {
     delete process.env.SETTINGS_JSON;
   });
 
-  test('it generates the API', async () => {
+  await test('it generates the API', async () => {
     await fs.rm('./out/api_wakayama_wakayama', { recursive: true, force: true });
     await mainPrefCity(['', '', './out/api_wakayama_wakayama']);
     await mainMachiAza(['', '', './out/api_wakayama_wakayama']);

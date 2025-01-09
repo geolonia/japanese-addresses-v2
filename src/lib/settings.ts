@@ -29,12 +29,12 @@ const DEFAULT_SETTINGS: Settings = {};
 
 async function loadRawSettings(input: string): Promise<Settings> {
   if (input.startsWith("json:")) {
-    return JSON.parse(input.slice(5));
+    return JSON.parse(input.slice(5)) as Settings;
   }
 
   try {
     const settingsData = await fs.readFile(input, "utf-8");
-    return JSON.parse(settingsData);
+    return JSON.parse(settingsData) as Settings;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") {
       return DEFAULT_SETTINGS;

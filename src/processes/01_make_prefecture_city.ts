@@ -7,7 +7,7 @@ import { projectABRData } from '../lib/proj.js';
 import { CityData, CityPosData, mergeCityData } from '../lib/ckan_data/city.js';
 import { mergePrefectureData, PrefData, PrefPosData } from '../lib/ckan_data/prefecture.js';
 
-async function outputCityData(outDir: string, prefName: string, apiData: CityApi, prefectureApi: PrefectureApi) {
+function outputCityData(outDir: string, prefName: string, apiData: CityApi, prefectureApi: PrefectureApi) {
   // 政令都市の「区名」が無い場合は出力から除外する
   const filteredApiData = apiData.data.filter((city) => {
     return (
@@ -70,7 +70,7 @@ async function main(argv: string[]) {
 
   let lastPref: string | undefined = undefined;
   let allCount = 0;
-  let processedLgCodes: Set<string> = new Set();
+  const processedLgCodes: Set<string> = new Set();
   let apiData: SingleCity[] = [];
   for (const raw of rawData) {
     allCount++;

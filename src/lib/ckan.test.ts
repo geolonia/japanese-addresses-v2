@@ -3,19 +3,19 @@ import test from 'node:test';
 
 import * as ckan from './ckan.js';
 
-test.describe('ckan', async () => {
-  test('ckanPackageSearch works', async () => {
+await test.describe('ckan', async () => {
+  await test('ckanPackageSearch works', async () => {
     const res = await ckan.ckanPackageSearch('香川県高松市');
     assert.ok(res.length > 0);
   });
 
-  test('getCkanPackageById works', async () => {
+  await test('getCkanPackageById works', async () => {
     const res = await ckan.getCkanPackageById('ba-o1-000000_g2-000001');
     assert.strictEqual(res.name, 'ba-o1-000000_g2-000001');
   });
 
-  test.describe('downloadAndExtract', () => {
-    test('should download, unzip, and parse the CSV file', async () => {
+  await test.describe('downloadAndExtract', async () => {
+    await test('should download, unzip, and parse the CSV file', async () => {
       const res = ckan.downloadAndExtract<Record<string, string>>('https://catalog.registries.digital.go.jp/rsc/address/mt_town_city372013.csv.zip');
       let count = 0;
       for await (const row of res) {

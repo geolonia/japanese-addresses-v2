@@ -33,6 +33,5 @@ export async function getDownloadStream(url: string): Promise<Readable> {
   }
 
   const bodyStream = fs.createReadStream(cacheFile);
-
   return bodyStream;
 }

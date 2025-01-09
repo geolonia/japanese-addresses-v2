@@ -5,16 +5,16 @@ import fs from 'node:fs/promises';
 import main from './03_make_rsdt.js';
 import { getRangesFromCSV } from './10_refresh_csv_ranges.js';
 
-test.describe('with filter for 131059 (東京都文京区)', async () => {
-  test.before(async () => {
+await test.describe('with filter for 131059 (東京都文京区)', async () => {
+  test.before(() => {
     process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['131059'] });
   });
 
-  test.after(async () => {
+  test.after(() => {
     delete process.env.SETTINGS_JSON;
   });
 
-  test('it generates the API', async () => {
+  await test('it generates the API', async () => {
     await fs.rm('./out/api_tokyo_bunkyo', { recursive: true, force: true });
     await main(['', '', './out/api_tokyo_bunkyo']);
     assert.ok(true);

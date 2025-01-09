@@ -9,7 +9,7 @@ import { rawToMachiAza } from './02_machi_aza.js';
 import { loadSettings } from '../lib/settings.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
-const HEADER_PBF_CHUNK_SIZE = 8_192;
+// const HEADER_PBF_CHUNK_SIZE = 8_192;
 
 function getOutPath(ma: MachiAzaData) {
   return path.join(
@@ -25,7 +25,7 @@ type HeaderRow = {
 }
 
 function serializeApiDataTxt(apiData: RsdtApi): { headerIterations: number, headerData: HeaderRow[], data: Buffer } {
-  let outSections: Buffer[] = [];
+  const outSections: Buffer[] = [];
   for ( const { machiAza, rsdts } of apiData ) {
     let outSection = `住居表示,${machiAzaName(machiAza)}\n` +
                      `blk_num,rsdt_num,rsdt_num2,lng,lat\n`;
@@ -177,7 +177,7 @@ async function main(argv: string[]) {
     const mainStreams: CSVParserIterator<RsdtdspRsdtData>[] = [];
     const posStreams: CSVParserIterator<RsdtdspRsdtPosData>[] = [];
     for (const pref of prefs) {
-      let mainSearchQuery = `${pref} 住居表示-住居マスター データセット`;
+      const mainSearchQuery = `${pref} 住居表示-住居マスター データセット`;
       const mainResults = await ckanPackageSearch(mainSearchQuery);
       const main = findResultByTypeAndArea(mainResults, '住居表示-住居マスター（都道府県）', pref);
       if (!main) {
@@ -185,7 +185,7 @@ async function main(argv: string[]) {
       }
       mainStreams.push(getAndStreamCSVDataForId<RsdtdspRsdtData>(main.id));
 
-      let posSearchQuery = `${pref} 住居表示-住居マスター位置参照拡張 データセット`;
+      const posSearchQuery = `${pref} 住居表示-住居マスター位置参照拡張 データセット`;
       const posResults = await ckanPackageSearch(posSearchQuery);
       const pos = findResultByTypeAndArea(posResults, '住居表示-住居マスター位置参照拡張（都道府県）', pref);
       if (!pos) {
@@ -204,11 +204,11 @@ async function main(argv: string[]) {
   let currentRsdtList: SingleRsdt[] = [];
   let currentMachiAza: MachiAzaData | undefined = undefined;
   for await (const raw of rawData) {
-    let ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
+    const ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
     if (!ma) {
       continue;
     }
-    let thisOutPath = getOutPath(ma);
+    const thisOutPath = getOutPath(ma);
     if (currentMachiAza && (currentMachiAza.machiaza_id !== ma.machiaza_id || currentMachiAza.lg_code !== ma.lg_code)) {
       if (currentRsdtList.length > 0) {
         apiData.push({

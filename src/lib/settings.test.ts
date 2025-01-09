@@ -18,15 +18,15 @@ after(async () => {
   delete process.env.SETTINGS_PATH;
 });
 
-test('loadSettings', async () => {
+await test('loadSettings', async () => {
   const parsedSettings = await settings.loadSettings();
   assert.equal(parsedSettings.lgCodes.length, 1);
   assert.ok(parsedSettings.lgCodes[0].test('011002'));
   assert.ok(!parsedSettings.lgCodes[0].test('131002'));
 });
 
-describe('lgCodeMatch', () => {
-  test('basic settings', () => {
+await describe('lgCodeMatch', async () => {
+  await test('basic settings', () => {
     const settingsData = settings.parseSettings({
       lgCodes: ['^01', '^13', '472018'],
     });
@@ -36,7 +36,7 @@ describe('lgCodeMatch', () => {
     assert.ok(settings.lgCodeMatch(settingsData, '472018'));
   });
 
-  test('市区町村まで指定されているときは、都道府県全体に対してマッチする', () => {
+  await test('市区町村まで指定されているときは、都道府県全体に対してマッチする', () => {
     const settingsData = settings.parseSettings({
       lgCodes: ['131002', '472018'],
     });
@@ -51,7 +51,7 @@ describe('lgCodeMatch', () => {
   });
 });
 
-test('loadSettings with overwritten JSON', async () => {
+await test('loadSettings with overwritten JSON', async () => {
   process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['^99'] });
   const parsedSettings = await settings.loadSettings();
   assert.equal(parsedSettings.lgCodes.length, 1);

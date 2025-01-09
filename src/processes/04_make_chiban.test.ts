@@ -5,16 +5,16 @@ import fs from 'node:fs/promises';
 import main from './04_make_chiban.js';
 import { getRangesFromCSV } from './10_refresh_csv_ranges.js';
 
-test.describe('with filter for 465054 (鹿児島県熊毛郡屋久島町)', async () => {
-  test.before(async () => {
+await test.describe('with filter for 465054 (鹿児島県熊毛郡屋久島町)', async () => {
+  test.before(() => {
     process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['465054'] });
   });
 
-  test.after(async () => {
+  test.after(() => {
     delete process.env.SETTINGS_JSON;
   });
 
-  test('it generates the API', async () => {
+  await test('it generates the API', async () => {
     await fs.rm('./out/api_kagoshima_yakushima', { recursive: true, force: true });
     await main(['', '', './out/api_kagoshima_yakushima']);
     assert.ok(true);
