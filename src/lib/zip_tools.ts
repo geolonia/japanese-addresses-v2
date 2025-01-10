@@ -13,6 +13,21 @@ export async function *unzipAndExtractZipFile(zipFile: Readable): AsyncGenerator
       yield *unzipAndExtractZipFile(entry);
     } else if (entry.type === 'File' && entry.path.endsWith('.csv')) {
       yield entry;
+    } else {
+      entry.autodrain();
+    }
+  }
+}
+
+export async function *unzipAndExtractZipBuffer(zipFile: Buffer): AsyncGenerator<Buffer & {path: string}> {
+  const directory = await unzipper.Open.buffer(zipFile);
+  for (const file of directory.files) {
+    if (file.type === 'File' && file.path.endsWith('.zip')) {
+      const content = await file.buffer();
+      yield *unzipAndExtractZipBuffer(content);
+    } else if (file.type === 'File' && file.path.endsWith('.csv')) {
+      const content = await file.buffer();
+      yield Object.assign(content, {path: file.path});
     }
   }
 }

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import { parse as csvParse } from 'csv-parse';
 
 import { fetch } from 'undici';
-import { unzipAndExtractZipFile } from './zip_tools.js';
+import { unzipAndExtractZipBuffer } from './zip_tools.js';
 import { getDownloadStream } from './fetch_tools.js';
 import { lgCodeMatch, loadSettings } from './settings.js';
 
@@ -122,11 +122,9 @@ export async function *combineCSVParserIterators<T>(...iterators: CSVParserItera
 
 export async function *downloadAndExtract<T>(url: string): CSVParserIterator<T> {
   const bodyStream = await getDownloadStream(url);
-  const fileEntries = unzipAndExtractZipFile(bodyStream);
+  const fileEntries = unzipAndExtractZipBuffer(bodyStream);
   for await (const entry of fileEntries) {
-    const csvParser = entry.pipe(csvParse({
-      quote: false,
-    }));
+    const csvParser = csvParse(entry, { quote: false });
     let header: string[] | undefined = undefined;
     for await (const r of csvParser) {
       const record = r as string[];

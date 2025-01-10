@@ -1,7 +1,7 @@
 import { parse as csvParse } from 'csv-parse';
 import iconv from 'iconv-lite';
 
-import { unzipAndExtractZipFile } from './zip_tools.js';
+import { unzipAndExtractZipBuffer } from './zip_tools.js';
 import { getDownloadStream } from './fetch_tools.js';
 
 const SKIP_ROWS = new Set([
@@ -79,13 +79,12 @@ export async function downloadAndExtractNlftpMlitFile(prefCode: string): Promise
   // 22.0a は街区レベル位置参照情報なので、ここには必要ない
   const url = `https://nlftp.mlit.go.jp/isj/dls/data/${version}/${prefCode}000-${version}.zip`;
   const bodyStream = await getDownloadStream(url);
-  const entries = unzipAndExtractZipFile(bodyStream);
+  const entries = unzipAndExtractZipBuffer(bodyStream);
   for await (const entry of entries) {
     if (entry.path.slice(-4) !== '.csv') continue;
+    const decoded = iconv.decode(entry, 'Shift_JIS');
     const rows = await Array.fromAsync<string[]>(
-      entry
-        .pipe(iconv.decodeStream('Shift_JIS'))
-        .pipe(csvParse())
+      csvParse(decoded)
     );
     return parseRows(rows);
   }
