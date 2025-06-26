@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { getAndStreamCSVDataForId } from '../lib/ckan.js';
 import { MachiAzaApi, SingleMachiAza } from '../data.js';
-import { MachiAzaData, MachiAzaPosData } from '../lib/ckan_data/machi_aza.js';
+import { MachiAzaData, MachiAzaPosData, MachiAzaMinPosData } from '../lib/ckan_data/machi_aza.js';
 import { mergeDataLeftJoin } from '../lib/ckan_data/index.js';
 import { rawToMachiAza } from './02_machi_aza.js';
 import { downloadAndExtractNlftpMlitFile, NlftpMlitDataRow } from '../lib/mlit_nlftp.js';
@@ -30,7 +30,18 @@ async function main(argv: string[]) {
 
   const mainStream = getAndStreamCSVDataForId<MachiAzaData>('ba-o1-000000_g2-000003');
   const posStream = getAndStreamCSVDataForId<MachiAzaPosData>('ba000004');
-  const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id']);
+  const minPosStream = async function* minPosStream(posStream: AsyncIterable<MachiAzaMinPosData>) {
+    for await (const pos of posStream) {
+      yield {
+        lg_code: pos.lg_code,
+        machiaza_id: pos.machiaza_id,
+        rep_lon: pos.rep_lon,
+        rep_lat: pos.rep_lat,
+        rep_srid: pos.rep_srid,
+      };
+    }
+  }
+  const rawData = mergeDataLeftJoin(mainStream, minPosStream(posStream), ['lg_code', 'machiaza_id']);
   // const rawData = mergeMachiAzaData(mainStream, posStream);
 
   let lastLGCode: string | undefined = undefined;

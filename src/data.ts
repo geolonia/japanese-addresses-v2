@@ -110,7 +110,7 @@ export type SingleMachiAza = {
   koaza_r?: string;
 
   /** 住居表示住所の情報の存在。値が存在しない場合は、住居表示住所の情報は存在しません。 */
-  rsdt?: true;
+  rsdt?: boolean;
 
   /** 代表点 */
   point?: LngLat;

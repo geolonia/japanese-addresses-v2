@@ -115,3 +115,16 @@ export type MachiAzaPosData = {
   /// 国勢調査_境界_データ整備年度
   cns_bnd_year: string;
 };
+
+export type MachiAzaMinPosData = {
+  /// 全国地方公共団体コード
+  lg_code: string;
+  /// 町字ID
+  machiaza_id: string;
+  /// 代表点_経度
+  rep_lon: string;
+  /// 代表点_緯度
+  rep_lat: string;
+  /// 代表点_座標参照系
+  rep_srid: string;
+};
