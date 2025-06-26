@@ -9,6 +9,7 @@ import { ckanPackageSearch, findResultByTypeAndArea, getAndParseCSVDataForId, ge
 import { machiAzaName, SingleChiban, SingleMachiAza } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
 import { MachiAzaData } from '../lib/ckan_data/machi_aza.js';
+import { rawToMachiAza } from './02_machi_aza.js';
 import { ChibanData, ChibanPosData } from '../lib/ckan_data/chiban.js';
 import { mergeDataLeftJoin } from '../lib/ckan_data/index.js';
 
@@ -164,7 +165,7 @@ async function main(argv: string[]) {
         }
         if (currentMachiAza && (currentMachiAza.machiaza_id !== ma.machiaza_id || currentMachiAza.lg_code !== ma.lg_code)) {
           apiData.push({
-            machiAza: currentMachiAza,
+            machiAza: rawToMachiAza(currentMachiAza),
             chibans: currentChibanList,
           });
           currentChibanList = [];
@@ -183,7 +184,7 @@ async function main(argv: string[]) {
       }
       if (currentMachiAza && currentChibanList.length > 0) {
         apiData.push({
-          machiAza: currentMachiAza,
+          machiAza: rawToMachiAza(currentMachiAza),
           chibans: currentChibanList,
         });
       }
