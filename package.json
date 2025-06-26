@@ -37,6 +37,7 @@
   ],
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@geolonia/japanese-numeral": "^1.0.2",
     "@tsconfig/node22": "^22.0.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/cli-progress": "^3.11.6",
