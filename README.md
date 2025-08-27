@@ -89,6 +89,8 @@ $ npm run run:01_make_prefecture_city # 都道府県・市区町村のみ作成
 $ npm run run:02_make_machi_aza # 町字API作成
 $ npm run run:03_make_rsdt # 住居表示住所API作成 (町字APIを先に作らないとエラーになります)
 $ npm run run:04_make_chiban # 地番住所API作成 (町字APIを先に作らないとエラーになります)
+$ npm run run:10_refresh_csv_ranges # 町字APIのCSVレンジを更新 (町字APIを先に作らないとエラーになります)
+$ npm run run:99_create_stats # 統計情報を作成
 ```
 
 #### APIビルド設定
