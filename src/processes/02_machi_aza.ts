@@ -6,7 +6,7 @@ import { projectABRData } from "../lib/proj.js";
 export function rawToMachiAza(raw: MachiAzaData | (MachiAzaData & MachiAzaPosData)): SingleMachiAza {
   let kanjiChome = undefined;
   if (raw.chome !== '') {
-    const numberChomePattern = /([０-９]+)(丁目?)/;
+    const numberChomePattern = /([０-９0-9]+)(丁目?)/;
     const matches = raw.chome.match(numberChomePattern);
     if (!matches) {
       kanjiChome = raw.chome;
