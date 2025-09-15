@@ -41,6 +41,7 @@
     "@tsconfig/node22": "^22.0.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/cli-progress": "^3.11.6",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^22.10.2",
     "@types/proj4": "^2.5.5",
     "@types/unzipper": "^0.10.10",
