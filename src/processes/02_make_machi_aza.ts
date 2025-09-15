@@ -3,8 +3,8 @@ import path from 'node:path';
 
 import { getAndStreamCSVDataForId } from '../lib/ckan.js';
 import { MachiAzaApi, SingleMachiAza } from '../data.js';
-import { MachiAzaData, MachiAzaPosData } from '../lib/ckan_data/machi_aza.js';
-import { mergeDataLeftJoin } from '../lib/ckan_data/index.js';
+import { MachiAzaData, MachiAzaPosData } from '../lib/abr_data/machi_aza.js';
+import { mergeDataLeftJoin } from '../lib/abr_data/index.js';
 import { rawToMachiAza } from './02_machi_aza.js';
 import { downloadAndExtractNlftpMlitFile, NlftpMlitDataRow } from '../lib/mlit_nlftp.js';
 import { createMergedApiData, filterMlitDataByPrefCity } from '../lib/abr_mlit_merge_tools.js';

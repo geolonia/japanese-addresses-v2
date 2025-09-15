@@ -4,8 +4,8 @@ import path from 'node:path';
 import { getAndParseCSVDataForId } from '../lib/ckan.js';
 import { CityApi, PrefectureApi, SingleCity, SinglePrefecture } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
-import { CityData, CityPosData, mergeCityData } from '../lib/ckan_data/city.js';
-import { mergePrefectureData, PrefData, PrefPosData } from '../lib/ckan_data/prefecture.js';
+import { CityData, CityPosData, mergeCityData } from '../lib/abr_data/city.js';
+import { mergePrefectureData, PrefData, PrefPosData } from '../lib/abr_data/prefecture.js';
 
 function outputCityData(outDir: string, prefName: string, apiData: CityApi, prefectureApi: PrefectureApi) {
   // 政令都市の「区名」が無い場合は出力から除外する

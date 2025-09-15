@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ckanPackageSearch, combineCSVParserIterators, CSVParserIterator, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/ckan.js';
-import { mergeRsdtdspRsdtData, RsdtdspRsdtData, RsdtdspRsdtPosData } from '../lib/ckan_data/rsdtdsp_rsdt.js';
+import { mergeRsdtdspRsdtData, RsdtdspRsdtData, RsdtdspRsdtPosData } from '../lib/abr_data/rsdtdsp_rsdt.js';
 import { machiAzaName, RsdtApi, SingleRsdt } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
-import { MachiAzaData } from '../lib/ckan_data/machi_aza.js';
+import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
 import { rawToMachiAza } from './02_machi_aza.js';
 import { loadSettings } from '../lib/settings.js';
 

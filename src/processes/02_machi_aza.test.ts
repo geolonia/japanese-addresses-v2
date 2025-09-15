@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import test from 'node:test';
 
 import { rawToMachiAza } from './02_machi_aza.js';
-import { MachiAzaData } from '../lib/ckan_data/machi_aza.js';
+import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
 
 const raw: MachiAzaData = {
   lg_code: '131041',

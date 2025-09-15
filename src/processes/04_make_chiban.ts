@@ -8,10 +8,10 @@ import cliProgress from 'cli-progress';
 import { ckanPackageSearch, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/ckan.js';
 import { machiAzaName, SingleChiban, SingleMachiAza } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
-import { MachiAzaData } from '../lib/ckan_data/machi_aza.js';
+import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
 import { rawToMachiAza } from './02_machi_aza.js';
-import { ChibanData, ChibanPosData } from '../lib/ckan_data/chiban.js';
-import { mergeDataLeftJoin } from '../lib/ckan_data/index.js';
+import { ChibanData, ChibanPosData } from '../lib/abr_data/chiban.js';
+import { mergeDataLeftJoin } from '../lib/abr_data/index.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
 

@@ -1,6 +1,6 @@
 import { kanji2number, number2kanji } from '@geolonia/japanese-numeral'
 import { SingleMachiAza } from "../data.js";
-import { MachiAzaData, MachiAzaPosData } from "../lib/ckan_data/machi_aza.js";
+import { MachiAzaData, MachiAzaPosData } from "../lib/abr_data/machi_aza.js";
 import { projectABRData } from "../lib/proj.js";
 
 export function rawToMachiAza(raw: MachiAzaData | (MachiAzaData & MachiAzaPosData)): SingleMachiAza {
