@@ -168,7 +168,7 @@ async function main(argv: string[]) {
   const hasFilter = (await loadSettings()).lgCodes.length > 0;
 
   // machiAzaData が既にフィルターされているので、そこからユニークな都道府県のみ抽出し、そのストリームのみ読み込むようにする
-  const prefs = hasFilter ? new Set(machiAzaData.map((ma) => ma.pref)) : Object.keys(prefectureNameCodes);
+  const prefs = hasFilter ? new Set(machiAzaData.map((ma) => ma.pref)) : new Set(Object.keys(prefectureNameCodes));
 
   const mainStreams: CSVParserIterator<RsdtdspRsdtData>[] = [];
   const posStreams: CSVParserIterator<RsdtdspRsdtPosData>[] = [];
