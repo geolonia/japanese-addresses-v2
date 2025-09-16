@@ -15,12 +15,17 @@ await test.describe('with filter for 131059 (東京都文京区)', async () => {
   });
 
   await test('it generates the API', async () => {
-    await fs.rm('./out/api_tokyo_bunkyo', { recursive: true, force: true });
-    await main(['', '', './out/api_tokyo_bunkyo']);
-    assert.ok(true);
+    try {
+      await fs.rm('./out/api_tokyo_bunkyo', { recursive: true, force: true });
+      await main(['', '', './out/api_tokyo_bunkyo']);
+      assert.ok(true);
 
-    const headers = await getRangesFromCSV('./out/api_tokyo_bunkyo/ja/東京都/文京区-住居表示.txt');
-    assert(typeof headers !== 'undefined');
-    assert.equal(headers[0].name, '白山一丁目');
+      const headers = await getRangesFromCSV('./out/api_tokyo_bunkyo/ja/東京都/文京区-住居表示.txt');
+      assert(typeof headers !== 'undefined');
+      assert.equal(headers[0].name, '白山一丁目');
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
   });
 });

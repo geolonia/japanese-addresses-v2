@@ -72,7 +72,7 @@ export async function getHubItemsByQuery(
       },
     });
     if (!res.ok) {
-      // console.log(url);
+      console.log(url);
       if (res.headers.get('content-type')?.includes('application/geo+json')) {
         const errorJson = await res.json() as HubSearchError;
         throw new Error(`HUB API returned an error: ${JSON.stringify(errorJson)}`);
@@ -105,7 +105,7 @@ export async function getHubItemById(id: string): Promise<HubSearchResult> {
       },
     });
     if (!res.ok) {
-      // console.log(url);
+      console.log(url);
       if (res.headers.get('content-type')?.includes('application/geo+json')) {
         const errorJson = await res.json() as HubSearchError;
         throw new Error(`HUB API returned an error: ${JSON.stringify(errorJson)}`);
