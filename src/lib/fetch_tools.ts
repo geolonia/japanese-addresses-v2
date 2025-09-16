@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 
-import { fetch } from 'undici';
+import { fetchWithRetry } from './fetch_with_retry.js';
 
 const USER_AGENT = 'curl/8.7.1';
 const CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
@@ -13,7 +13,7 @@ export async function getDownloadStream(url: string): Promise<Buffer> {
   let buffer: Buffer;
   if (!fs.existsSync(cacheFile)) {
     // console.log(`Downloading ${url}`);
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: {
         'User-Agent': USER_AGENT,
       },

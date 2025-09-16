@@ -3,8 +3,8 @@ import fs from 'node:fs';
 
 import { parse as csvParse } from 'csv-parse';
 
-import { fetch } from 'undici';
 import GeoJSON from 'geojson';
+import { fetchWithRetry } from './fetch_with_retry.js';
 import { unzipAndExtractZipBuffer } from './zip_tools.js';
 import { getDownloadStream } from './fetch_tools.js';
 import { lgCodeMatch, loadSettings } from './settings.js';
@@ -66,7 +66,7 @@ export async function getHubItemsByQuery(
     if (sortBy) {
       url += `&sortBy=-properties.${sortBy}`;
     }
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: {
         'User-Agent': USER_AGENT,
       },
@@ -98,8 +98,8 @@ export async function getHubItemById(id: string): Promise<HubSearchResult> {
     json = await fs.promises.readFile(cacheFile, 'utf-8')
       .then((data) => JSON.parse(data) as HubSearchResult);
   } else {
-    const url = new URL(`${HUB_BASE_REGISTRY_URL}/collections/all/items/${id}`);
-    const res = await fetch(url.toString(), {
+    const url = `${HUB_BASE_REGISTRY_URL}/collections/all/items/${id}`;
+    const res = await fetchWithRetry(url, {
       headers: {
         'User-Agent': USER_AGENT,
       },
