@@ -46,7 +46,7 @@ async function main(argv: string[]) {
 
     let lastLGCode: string | undefined = undefined;
     let lastCityName: string | undefined = undefined;
-    const mlitData: NlftpMlitDataRow[] =  await downloadAndExtractNlftpMlitFile(prefectureNameCodes[prefName]);
+    const mlitData: NlftpMlitDataRow[] = await downloadAndExtractNlftpMlitFile(prefectureNameCodes[prefName]);
     let apiData: SingleMachiAza[] = [];
     for await (const raw of rawData) {
       if (lastLGCode !== raw.lg_code && lastLGCode !== undefined) {
