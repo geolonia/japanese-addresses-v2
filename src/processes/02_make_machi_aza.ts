@@ -1,13 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { getAndStreamCSVDataForId } from '../lib/ckan.js';
+import { getHubItemsByQuery, findResultByTypeAndArea, getAndStreamCSVDataForId } from '../lib/hub.js';
 import { MachiAzaApi, SingleMachiAza } from '../data.js';
 import { MachiAzaData, MachiAzaPosData } from '../lib/abr_data/machi_aza.js';
 import { mergeDataLeftJoin } from '../lib/abr_data/index.js';
 import { rawToMachiAza } from './02_machi_aza.js';
 import { downloadAndExtractNlftpMlitFile, NlftpMlitDataRow } from '../lib/mlit_nlftp.js';
 import { createMergedApiData, filterMlitDataByPrefCity } from '../lib/abr_mlit_merge_tools.js';
+import { prefectureNameCodes } from '../lib/prefecture_name_codes.js';
 
 async function outputMachiAzaData(
   outDir: string,
@@ -27,45 +28,47 @@ async function main(argv: string[]) {
   const outDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
-
-  const mainStream = getAndStreamCSVDataForId<MachiAzaData>('ba-o1-000000_g2-000003');
-  const posStream = getAndStreamCSVDataForId<MachiAzaPosData>('ba000004');
-  const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id']);
-  // const rawData = mergeMachiAzaData(mainStream, posStream);
-
-  let lastLGCode: string | undefined = undefined;
-  let lastPrefName: string | undefined = undefined;
-  let lastCityName: string | undefined = undefined;
-  let lastMlitData: NlftpMlitDataRow[] | undefined = undefined;
   let allCount = 0;
-  let apiData: SingleMachiAza[] = [];
-  for await (const raw of rawData) {
-    if (lastLGCode !== raw.lg_code && lastLGCode !== undefined) {
-      const filteredMlit = filterMlitDataByPrefCity(lastMlitData!, lastPrefName!, lastCityName!);
+
+  for (const prefName of Object.keys(prefectureNameCodes)) {
+    const machiAzaResults = await getHubItemsByQuery('町字マスター', '都道府県レベル', prefName);
+    const machiAzaResult = findResultByTypeAndArea(machiAzaResults.features, '町字マスター', prefName);
+    if (!machiAzaResult) {
+      throw new Error(`「${prefName} 町字マスター」データセットが見つかりませんでした`);
+    }
+    const machiAzaPosResult = findResultByTypeAndArea(machiAzaResults.features, '町字マスター位置参照拡張', prefName);
+    if (!machiAzaPosResult) {
+      throw new Error(`「${prefName} 町字マスター位置参照拡張」データセットが見つかりませんでした`);
+    }
+    const mainStream = getAndStreamCSVDataForId<MachiAzaData>(machiAzaResult.properties.id);
+    const posStream = getAndStreamCSVDataForId<MachiAzaPosData>(machiAzaPosResult.properties.id);
+    const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id']);
+
+    let lastLGCode: string | undefined = undefined;
+    let lastCityName: string | undefined = undefined;
+    const mlitData: NlftpMlitDataRow[] =  await downloadAndExtractNlftpMlitFile(prefectureNameCodes[prefName]);
+    let apiData: SingleMachiAza[] = [];
+    for await (const raw of rawData) {
+      if (lastLGCode !== raw.lg_code && lastLGCode !== undefined) {
+        const filteredMlit = filterMlitDataByPrefCity(mlitData, prefName, lastCityName!);
+        apiData = createMergedApiData(apiData, filteredMlit);
+        const api: MachiAzaApi = { meta: { updated }, data: apiData };
+        allCount += await outputMachiAzaData(outDir, prefName, lastCityName!, api);
+        apiData = [];
+      }
+      if (lastLGCode !== raw.lg_code) {
+        lastLGCode = raw.lg_code;
+        lastCityName = `${raw.county}${raw.city}${raw.ward}`;
+      }
+      apiData.push(rawToMachiAza(raw));
+    }
+    if (lastLGCode) {
+      const filteredMlit = filterMlitDataByPrefCity(mlitData, prefName, lastCityName!);
       apiData = createMergedApiData(apiData, filteredMlit);
       const api: MachiAzaApi = { meta: { updated }, data: apiData };
-      allCount += await outputMachiAzaData(outDir, lastPrefName!, lastCityName!, api);
-      apiData = [];
+      allCount += await outputMachiAzaData(outDir, prefName, lastCityName!, api);
     }
-    if (lastPrefName !== raw.pref) {
-      // 都道府県が変わったので、都道府県レベルの新しいデータを取得する
-      lastMlitData = await downloadAndExtractNlftpMlitFile(raw.lg_code.slice(0, 2));
-    }
-    if (lastLGCode !== raw.lg_code) {
-      lastLGCode = raw.lg_code;
-      lastPrefName = raw.pref;
-      lastCityName = `${raw.county}${raw.city}${raw.ward}`;
-    }
-
-    apiData.push(rawToMachiAza(raw));
   }
-  if (lastLGCode) {
-    const filteredMlit = filterMlitDataByPrefCity(lastMlitData!, lastPrefName!, lastCityName!);
-    apiData = createMergedApiData(apiData, filteredMlit);
-    const api: MachiAzaApi = { meta: { updated }, data: apiData };
-    allCount += await outputMachiAzaData(outDir, lastPrefName!, lastCityName!, api);
-  }
-
   console.log(`全国: ${allCount} 件の町字を出力した`);
 }
 

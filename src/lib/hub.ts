@@ -4,10 +4,11 @@ import fs from 'node:fs';
 import { parse as csvParse } from 'csv-parse';
 
 import { fetch } from 'undici';
+import GeoJSON from 'geojson';
 import { unzipAndExtractZipBuffer } from './zip_tools.js';
 import { getDownloadStream } from './fetch_tools.js';
 import { lgCodeMatch, loadSettings } from './settings.js';
-import GeoJSON from 'geojson';
+import { PrefectureName } from './prefecture_name_codes.js';
 
 const HUB_BASE_REGISTRY_URL = `https://dataset.address-br.digital.go.jp/api/search/v1`;
 const USER_AGENT = 'curl/8.7.1';
@@ -37,8 +38,13 @@ export type HubSearchError = {
   statusCode: number,
 }
 
-export async function getHubItemsByQuery(query: string): Promise<HubSearchResultList> {
-  const cacheKey = `hub_items_by_query_${query}.json`;
+export async function getHubItemsByQuery(
+  query: string,
+  categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
+  categoryPref?: PrefectureName,
+  sortBy?: 'title' | 'created' | 'modified'
+): Promise<HubSearchResultList> {
+  const cacheKey = `hub_items_by_query_${query}_${categoryLevel}_${categoryPref}_${sortBy}.json`;
   const cacheFile = path.join(CACHE_DIR, 'hub', cacheKey);
 
   let json: HubSearchResultList;
@@ -46,15 +52,26 @@ export async function getHubItemsByQuery(query: string): Promise<HubSearchResult
     json = await fs.promises.readFile(cacheFile, 'utf-8')
       .then((data) => JSON.parse(data) as HubSearchResultList);
   } else {
-    const url = new URL(`${HUB_BASE_REGISTRY_URL}/collections/all/items?`
-      + 'filter=((group IN (864dfb9be4ef483d864e886fa25e1c94)))&limit=12');
-    url.searchParams.set('q', query);
-    const res = await fetch(url.toString(), {
+    let categoryPart = '';
+    if (categoryLevel && categoryPref) {
+      categoryPart = ` AND ((categories IN (/categories/${categoryLevel}/${categoryPref})))`;
+    } else if (categoryLevel) {
+      categoryPart = ` AND ((categories IN (/categories/${categoryLevel})))`;
+    }
+    let url = `${HUB_BASE_REGISTRY_URL}/collections/all/items?`
+      + `filter=((group IN (864dfb9be4ef483d864e886fa25e1c94)))${encodeURIComponent(categoryPart)}`
+      + '&limit=12'
+      + `&q=${encodeURIComponent(query)}`;
+    if (sortBy) {
+      url += `&sortBy=-properties.${sortBy}`;
+    }
+    const res = await fetch(url, {
       headers: {
         'User-Agent': USER_AGENT,
       },
     });
     if (!res.ok) {
+      // console.log(url);
       if (res.headers.get('content-type')?.includes('application/geo+json')) {
         const errorJson = await res.json() as HubSearchError;
         throw new Error(`HUB API returned an error: ${JSON.stringify(errorJson)}`);
@@ -87,6 +104,7 @@ export async function getHubItemById(id: string): Promise<HubSearchResult> {
       },
     });
     if (!res.ok) {
+      // console.log(url);
       if (res.headers.get('content-type')?.includes('application/geo+json')) {
         const errorJson = await res.json() as HubSearchError;
         throw new Error(`HUB API returned an error: ${JSON.stringify(errorJson)}`);

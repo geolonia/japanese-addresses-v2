@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ckanPackageSearch, combineCSVParserIterators, CSVParserIterator, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/ckan.js';
+import { getHubItemsByQuery, combineCSVParserIterators, CSVParserIterator, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/hub.js';
 import { mergeRsdtdspRsdtData, RsdtdspRsdtData, RsdtdspRsdtPosData } from '../lib/abr_data/rsdtdsp_rsdt.js';
 import { machiAzaName, RsdtApi, SingleRsdt } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
 import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
 import { rawToMachiAza } from './02_machi_aza.js';
 import { loadSettings } from '../lib/settings.js';
+import { prefectureNameCodes } from '../lib/prefecture_name_codes.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
 // const HEADER_PBF_CHUNK_SIZE = 8_192;
@@ -153,49 +154,41 @@ async function main(argv: string[]) {
   const outDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
-  const machiAzaData = await getAndParseCSVDataForId<MachiAzaData>('ba-o1-000000_g2-000003'); // 市区町村 & 町字
+  const machiAzaResults = await getHubItemsByQuery('町字マスター', '全国レベル');
+  const machiAzaResult = findResultByTypeAndArea(machiAzaResults.features, '町字マスター', '全国');
+  if (!machiAzaResult) {
+    throw new Error(`「全国 町字マスター」データセットが見つかりませんでした`);
+  }
+  const machiAzaData = await getAndParseCSVDataForId<MachiAzaData>(machiAzaResult.properties.id); // 市区町村 & 町字
   const machiAzaDataByCode = new Map(machiAzaData.map((city) => [
     `${city.lg_code}|${city.machiaza_id}`,
     city
   ]));
 
-  // 鹿児島県
-  // const mainStream = getAndStreamCSVDataForId<RsdtdspRsdtData>('ba-o1-460001_g2-000005');
-  // const posStream = getAndStreamCSVDataForId<RsdtdspRsdtPosData>('ba-o1-460001_g2-000008');
-
   const hasFilter = (await loadSettings()).lgCodes.length > 0;
 
-  let mainStream: CSVParserIterator<RsdtdspRsdtData>;
-  let posStream: CSVParserIterator<RsdtdspRsdtPosData>;
-  if (!hasFilter) {
-    mainStream = getAndStreamCSVDataForId<RsdtdspRsdtData>('ba000003');
-    posStream = getAndStreamCSVDataForId<RsdtdspRsdtPosData>('ba000006');
-  } else {
-    // machiAzaData が既にフィルターされているので、そこからユニークな都道府県のみ抽出し、そのストリームのみ読み込むようにする
-    const prefs = new Set(machiAzaData.map((ma) => ma.pref));
+  // machiAzaData が既にフィルターされているので、そこからユニークな都道府県のみ抽出し、そのストリームのみ読み込むようにする
+  const prefs = hasFilter ? new Set(machiAzaData.map((ma) => ma.pref)) : Object.keys(prefectureNameCodes);
 
-    const mainStreams: CSVParserIterator<RsdtdspRsdtData>[] = [];
-    const posStreams: CSVParserIterator<RsdtdspRsdtPosData>[] = [];
-    for (const pref of prefs) {
-      const mainSearchQuery = `${pref} 住居表示-住居マスター データセット`;
-      const mainResults = await ckanPackageSearch(mainSearchQuery);
-      const main = findResultByTypeAndArea(mainResults, '住居表示-住居マスター（都道府県）', pref);
-      if (!main) {
-        throw new Error(`「${pref}」の住居表示-住居マスター データセットが見つかりませんでした`);
-      }
-      mainStreams.push(getAndStreamCSVDataForId<RsdtdspRsdtData>(main.id));
-
-      const posSearchQuery = `${pref} 住居表示-住居マスター位置参照拡張 データセット`;
-      const posResults = await ckanPackageSearch(posSearchQuery);
-      const pos = findResultByTypeAndArea(posResults, '住居表示-住居マスター位置参照拡張（都道府県）', pref);
-      if (!pos) {
-        throw new Error(`「${pref}」の住居表示-住居マスター位置参照拡張 データセットが見つかりませんでした`);
-      }
-      posStreams.push(getAndStreamCSVDataForId<RsdtdspRsdtPosData>(pos.id));
+  const mainStreams: CSVParserIterator<RsdtdspRsdtData>[] = [];
+  const posStreams: CSVParserIterator<RsdtdspRsdtPosData>[] = [];
+  for (const pref of prefs) {
+    const mainResults = await getHubItemsByQuery('住居表示-住居マスター', '都道府県レベル', pref);
+    const main = findResultByTypeAndArea(mainResults.features, '住居表示-住居マスター', pref);
+    if (!main) {
+      throw new Error(`「${pref} 住居表示-住居マスター」データセットが見つかりませんでした`);
     }
-    mainStream = combineCSVParserIterators(...mainStreams);
-    posStream = combineCSVParserIterators(...posStreams);
+    mainStreams.push(getAndStreamCSVDataForId<RsdtdspRsdtData>(main.properties.id));
+
+    const pos = findResultByTypeAndArea(mainResults.features, '住居表示-住居マスター位置参照拡張', pref);
+    if (!pos) {
+      throw new Error(`「${pref} 住居表示-住居マスター位置参照拡張」データセットが見つかりませんでした`);
+    }
+    posStreams.push(getAndStreamCSVDataForId<RsdtdspRsdtPosData>(pos.properties.id));
   }
+  const mainStream: CSVParserIterator<RsdtdspRsdtData> = combineCSVParserIterators(...mainStreams);
+  const posStream: CSVParserIterator<RsdtdspRsdtPosData> = combineCSVParserIterators(...posStreams);
+
   const rawData = mergeRsdtdspRsdtData(mainStream, posStream);
 
   let lastOutPath: string | undefined = undefined;

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { getAndParseCSVDataForId } from '../lib/ckan.js';
+import { getHubItemsByQuery, findResultByTypeAndArea, getAndParseCSVDataForId } from '../lib/hub.js';
 import { CityApi, PrefectureApi, SingleCity, SinglePrefecture } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
 import { CityData, CityPosData, mergeCityData } from '../lib/abr_data/city.js';
@@ -32,6 +32,26 @@ async function main(argv: string[]) {
   const outDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
+  const prefResults = await getHubItemsByQuery('都道府県マスター', '全国レベル');
+  const prefResult = findResultByTypeAndArea(prefResults.features, '都道府県マスター', '全国');
+  if (!prefResult) {
+    throw new Error(`「全国 都道府県マスター」データセットが見つかりませんでした`);
+  }
+  const prefPosResult = findResultByTypeAndArea(prefResults.features, '都道府県マスター位置参照拡張', '全国');
+  if (!prefPosResult) {
+    throw new Error(`「全国 都道府県マスター位置参照拡張」データセットが見つかりませんでした`);
+  }
+
+  const cityResults = await getHubItemsByQuery('市区町村マスター', '全国レベル');
+  const cityResult = findResultByTypeAndArea(cityResults.features, '市区町村マスター', '全国');
+  if (!cityResult) {
+    throw new Error(`「全国 市区町村マスター」データセットが見つかりませんでした`);
+  }
+  const cityPosResult = findResultByTypeAndArea(cityResults.features, '市区町村マスター位置参照拡張', '全国');
+  if (!cityPosResult) {
+    throw new Error(`「全国 市区町村マスター位置参照拡張」データセットが見つかりませんでした`);
+  }
+
   const [
     prefMain,
     prefPos,
@@ -39,11 +59,11 @@ async function main(argv: string[]) {
     main,
     pos,
   ] = await Promise.all([
-    getAndParseCSVDataForId<PrefData>('ba-o1-000000_g2-000001'), // 都道府県
-    getAndParseCSVDataForId<PrefPosData>('ba-o1-000000_g2-000012'), // 位置参照拡張
+    getAndParseCSVDataForId<PrefData>(prefResult.properties.id), // 全国 都道府県マスター
+    getAndParseCSVDataForId<PrefPosData>(prefPosResult.properties.id), // 全国 都道府県マスター位置参照拡張
 
-    getAndParseCSVDataForId<CityData>('ba-o1-000000_g2-000002'), // 市区町村
-    getAndParseCSVDataForId<CityPosData>('ba-o1-000000_g2-000013'), // 位置参照拡張
+    getAndParseCSVDataForId<CityData>(cityResult.properties.id), // 全国 市区町村マスター
+    getAndParseCSVDataForId<CityPosData>(cityPosResult.properties.id), // 全国 市区町村マスター位置参照拡張
   ]);
   const rawData = mergeCityData(main, pos);
 
