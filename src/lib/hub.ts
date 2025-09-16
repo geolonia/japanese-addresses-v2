@@ -11,6 +11,7 @@ import { lgCodeMatch, loadSettings } from './settings.js';
 import { PrefectureName } from './prefecture_name_codes.js';
 
 const HUB_BASE_REGISTRY_URL = `https://dataset.address-br.digital.go.jp/api/search/v1`;
+const HUB_GROUP_ID = '864dfb9be4ef483d864e886fa25e1c94';
 const USER_AGENT = 'curl/8.7.1';
 const CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
 
@@ -59,7 +60,7 @@ export async function getHubItemsByQuery(
       categoryPart = ` AND ((categories IN (/categories/${categoryLevel})))`;
     }
     let url = `${HUB_BASE_REGISTRY_URL}/collections/all/items?`
-      + `filter=((group IN (864dfb9be4ef483d864e886fa25e1c94)))${encodeURIComponent(categoryPart)}`
+      + `filter=((group IN (${HUB_GROUP_ID})))${encodeURIComponent(categoryPart)}`
       + '&limit=12'
       + `&q=${encodeURIComponent(query)}`;
     if (sortBy) {
