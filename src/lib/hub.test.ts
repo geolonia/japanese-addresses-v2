@@ -5,7 +5,7 @@ import * as hub from './hub.js';
 
 await test.describe('hub', async () => {
   await test('getHubItemsByQuery works', async () => {
-    const res = await hub.getHubItemsByQuery('香川県高松市');
+    const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
     assert.ok(res.numberMatched > 0);
     assert.ok(res.features.length >= res.numberMatched);
   });
