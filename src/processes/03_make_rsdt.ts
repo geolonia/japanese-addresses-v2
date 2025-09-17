@@ -6,7 +6,7 @@ import { machiAzaName, RsdtApi, SingleRsdt } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
 import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
 import { rawToMachiAza } from './02_machi_aza.js';
-import { loadSettings, lgCodeMatch } from '../lib/settings.js';
+import { loadSettings, lgCodeMatch, ParsedSettings } from '../lib/settings.js';
 import { prefectureNameCodes } from '../lib/prefecture_name_codes.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
@@ -150,90 +150,96 @@ async function outputRsdtData(outDir: string, outFilename: string, apiData: Rsdt
   console.log(`${outFilename}-住居表示: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字を出力した`);
 }
 
+async function process(pref: string, settings: ParsedSettings, outDir: string): Promise<void> {
+  const isMatch = lgCodeMatch(settings, prefectureNameCodes[pref]);
+  if (!isMatch) {
+    return;
+  }
+  const machiAzaResults = await getHubItemsByQuery('町字マスター', '都道府県レベル', pref);
+  const machiAzaResult = findResultByTypeAndArea(machiAzaResults.features, '町字マスター', pref);
+  if (!machiAzaResult) {
+    throw new Error(`「${pref} 町字マスター」データセットが見つかりませんでした`);
+  }
+  const machiAzaData = await getAndParseCSVDataForId<MachiAzaData>(machiAzaResult.properties.id); // 市区町村 & 町字
+  const machiAzaDataByCode = new Map(machiAzaData.map((city) => [
+    `${city.lg_code}|${city.machiaza_id}`,
+    city
+  ]));
+
+  const mainResults = await getHubItemsByQuery('住居表示-住居マスター', '都道府県レベル', pref);
+  const main = findResultByTypeAndArea(mainResults.features, '住居表示-住居マスター', pref);
+  if (!main) {
+    throw new Error(`「${pref} 住居表示-住居マスター」データセットが見つかりませんでした`);
+  }
+  const mainStream: CSVParserIterator<RsdtdspRsdtData> = getAndStreamCSVDataForId<RsdtdspRsdtData>(main.properties.id);
+
+  const pos = findResultByTypeAndArea(mainResults.features, '住居表示-住居マスター位置参照拡張', pref);
+  if (!pos) {
+    throw new Error(`「${pref} 住居表示-住居マスター位置参照拡張」データセットが見つかりませんでした`);
+  }
+  const posStream: CSVParserIterator<RsdtdspRsdtPosData> = getAndStreamCSVDataForId<RsdtdspRsdtPosData>(pos.properties.id);
+  const rawData = mergeRsdtdspRsdtData(mainStream, posStream);
+
+  let lastOutPath: string | undefined = undefined;
+
+  let apiData: RsdtApi = [];
+  let currentRsdtList: SingleRsdt[] = [];
+  let currentMachiAza: MachiAzaData | undefined = undefined;
+  for await (const raw of rawData) {
+    const ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
+    if (!ma) {
+      continue;
+    }
+    const thisOutPath = getOutPath(ma);
+    if (currentMachiAza && (currentMachiAza.machiaza_id !== ma.machiaza_id || currentMachiAza.lg_code !== ma.lg_code)) {
+      if (currentRsdtList.length > 0) {
+        apiData.push({
+          machiAza: rawToMachiAza(currentMachiAza),
+          rsdts: currentRsdtList,
+        });
+      }
+      currentMachiAza = ma;
+      currentRsdtList = [];
+    }
+    if (lastOutPath !== thisOutPath && lastOutPath !== undefined) {
+      await outputRsdtData(outDir, lastOutPath, apiData);
+      apiData = [];
+    }
+    if (lastOutPath !== thisOutPath) {
+      lastOutPath = thisOutPath;
+    }
+    if (!currentMachiAza) {
+      currentMachiAza = ma;
+    }
+
+    currentRsdtList.push({
+      blk_num: raw.blk_num === '' ? undefined : raw.blk_num,
+      rsdt_num: raw.rsdt_num,
+      rsdt_num2: raw.rsdt_num2 === '' ? undefined : raw.rsdt_num2,
+      point: 'rep_srid' in raw ? projectABRData(raw) : undefined,
+    });
+  }
+  if (currentMachiAza && currentRsdtList.length > 0) {
+    apiData.push({
+      machiAza: rawToMachiAza(currentMachiAza),
+      rsdts: currentRsdtList,
+    });
+  }
+  if (lastOutPath) {
+    await outputRsdtData(outDir, lastOutPath, apiData);
+  }
+}
+
 async function main(argv: string[]) {
   const outDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
 
   const settings = await loadSettings();
+  const processPrefs = [];
   for (const pref of Object.keys(prefectureNameCodes)) {
-    const isMatch = lgCodeMatch(settings, prefectureNameCodes[pref]);
-    if (!isMatch) {
-      continue;
-    }
-    const machiAzaResults = await getHubItemsByQuery('町字マスター', '都道府県レベル', pref);
-    const machiAzaResult = findResultByTypeAndArea(machiAzaResults.features, '町字マスター', pref);
-    if (!machiAzaResult) {
-      throw new Error(`「${pref} 町字マスター」データセットが見つかりませんでした`);
-    }
-    const machiAzaData = await getAndParseCSVDataForId<MachiAzaData>(machiAzaResult.properties.id); // 市区町村 & 町字
-    const machiAzaDataByCode = new Map(machiAzaData.map((city) => [
-      `${city.lg_code}|${city.machiaza_id}`,
-      city
-    ]));
-
-    const mainResults = await getHubItemsByQuery('住居表示-住居マスター', '都道府県レベル', pref);
-    const main = findResultByTypeAndArea(mainResults.features, '住居表示-住居マスター', pref);
-    if (!main) {
-      throw new Error(`「${pref} 住居表示-住居マスター」データセットが見つかりませんでした`);
-    }
-    const mainStream: CSVParserIterator<RsdtdspRsdtData> = getAndStreamCSVDataForId<RsdtdspRsdtData>(main.properties.id);
-
-    const pos = findResultByTypeAndArea(mainResults.features, '住居表示-住居マスター位置参照拡張', pref);
-    if (!pos) {
-      throw new Error(`「${pref} 住居表示-住居マスター位置参照拡張」データセットが見つかりませんでした`);
-    }
-    const posStream: CSVParserIterator<RsdtdspRsdtPosData> = getAndStreamCSVDataForId<RsdtdspRsdtPosData>(pos.properties.id);
-    const rawData = mergeRsdtdspRsdtData(mainStream, posStream);
-
-    let lastOutPath: string | undefined = undefined;
-
-    let apiData: RsdtApi = [];
-    let currentRsdtList: SingleRsdt[] = [];
-    let currentMachiAza: MachiAzaData | undefined = undefined;
-    for await (const raw of rawData) {
-      const ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
-      if (!ma) {
-        continue;
-      }
-      const thisOutPath = getOutPath(ma);
-      if (currentMachiAza && (currentMachiAza.machiaza_id !== ma.machiaza_id || currentMachiAza.lg_code !== ma.lg_code)) {
-        if (currentRsdtList.length > 0) {
-          apiData.push({
-            machiAza: rawToMachiAza(currentMachiAza),
-            rsdts: currentRsdtList,
-          });
-        }
-        currentMachiAza = ma;
-        currentRsdtList = [];
-      }
-      if (lastOutPath !== thisOutPath && lastOutPath !== undefined) {
-        await outputRsdtData(outDir, lastOutPath, apiData);
-        apiData = [];
-      }
-      if (lastOutPath !== thisOutPath) {
-        lastOutPath = thisOutPath;
-      }
-      if (!currentMachiAza) {
-        currentMachiAza = ma;
-      }
-
-      currentRsdtList.push({
-        blk_num: raw.blk_num === '' ? undefined : raw.blk_num,
-        rsdt_num: raw.rsdt_num,
-        rsdt_num2: raw.rsdt_num2 === '' ? undefined : raw.rsdt_num2,
-        point: 'rep_srid' in raw ? projectABRData(raw) : undefined,
-      });
-    }
-    if (currentMachiAza && currentRsdtList.length > 0) {
-      apiData.push({
-        machiAza: rawToMachiAza(currentMachiAza),
-        rsdts: currentRsdtList,
-      });
-    }
-    if (lastOutPath) {
-      await outputRsdtData(outDir, lastOutPath, apiData);
-    }
+    processPrefs.push(process(pref, settings, outDir));
   }
+  await Promise.all(processPrefs);
 }
 
 export default main;
