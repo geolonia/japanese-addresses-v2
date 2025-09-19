@@ -1,61 +1,114 @@
+import path from 'node:path';
+import fs from 'node:fs';
 import assert from 'node:assert';
-import test from 'node:test';
-// TODO: エラー用のモック作成
-// import { MockAgent, setGlobalDispatcher } from 'undici';
+import { describe, test, beforeEach } from 'node:test';
+import { MockAgent, setGlobalDispatcher, Agent } from 'undici';
 
 import * as hub from './hub.js';
 
-await test.describe('hub', async () => {
+const CACHE_HUB_DIR = path.join(import.meta.dirname, '..', '..', 'cache', 'hub');
 
-  await test('getHubItemsByQuery should find existing data', async () => {
-    const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
-    assert.ok(res.numberMatched > 0);
-    assert.ok(res.features.length >= res.numberMatched);
+await describe('hub', async () => {
+  beforeEach(() => {
+    if (fs.existsSync(CACHE_HUB_DIR)) {
+      try {
+        fs.rmSync(CACHE_HUB_DIR, { recursive: true });
+      } catch (err) {
+        console.error('Error cleaning up cache directory:', err);
+      }
+    }
   });
 
-  await test('getHubItemsByQuery should not find non-existing data', async () => {
-    const res = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');
-    assert.ok(res.numberMatched === 0);
-    assert.ok(res.features.length === 0);
-  });
+  await test.describe('getHubItemsByQuery', async () => {
+    await test('getHubItemsByQuery should find existing data', async () => {
+      const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
+      assert.ok(res.numberMatched > 0);
+      assert.ok(res.features.length >= res.numberMatched);
+    });
 
-  // TODO: エラー用のモック作成
-  /*
-  await test('getHubItemsByQuery should handle fetch error', async () => {
-    // Set up undici MockAgent
-    const mockAgent = new MockAgent();
-    setGlobalDispatcher(mockAgent);
+    await test('getHubItemsByQuery should not find non-existing data', async () => {
+      const res = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');
+      assert.ok(res.numberMatched === 0);
+      assert.ok(res.features.length === 0);
+    });
 
-    const mockPool = mockAgent.get('https://dataset.address-br.digital.go.jp');
-    mockPool.intercept({ path: '/api/search/v1/collections/all/items', method: 'GET' })
-      .reply(404, {
-          message: "Cannot GET /api/search/v1/collections/all/items",
-          error: "Not Found",
-          statusCode: 404
-        }
+    await test('getHubItemsByQuery should handle hub handled error', async () => {
+      const mockAgent = new MockAgent();
+      setGlobalDispatcher(mockAgent);
+
+      const mockPool = mockAgent.get('https://dataset.address-br.digital.go.jp');
+      mockPool.intercept({
+          path: '/api/search/v1/collections/all/items?filter=((group IN (864dfb9be4ef483d864e886fa25e1c94)))%20AND%20((categories%20IN%20(%2Fcategories%2F%E5%B8%82%E5%8C%BA%E7%94%BA%E6%9D%91%E3%83%AC%E3%83%99%E3%83%AB%2F%E9%A6%99%E5%B7%9D%E7%9C%8C)))&limit=12&q=%E9%A6%99%E5%B7%9D%E7%9C%8C%E9%AB%98%E6%9D%BE%E5%B8%82',
+          method: 'GET',
+        }).reply(
+          404, {
+            message: "Cannot GET /api/search/v1/collections/all/items",
+            error: "Not Found",
+            statusCode: 404
+          }, {
+            headers: { 'content-type': 'application/geo+json' }
+          }
+        );
+
+      await assert.rejects(
+        hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+        new Error('HUB API returned an error: {"message":"Cannot GET /api/search/v1/collections/all/items","error":"Not Found","statusCode":404}')
       );
 
-    await assert.rejects(
-      hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
-      /HUB API returned an error: 404 Not Found/
-    );
+      await mockAgent.close();
+      setGlobalDispatcher(new Agent());
+    });
 
-    // Restore undici dispatcher
-    await mockAgent.close();
+    await test('getHubItemsByQuery should handle hub unhandled error', async () => {
+      const mockAgent = new MockAgent();
+      setGlobalDispatcher(mockAgent);
+
+      const mockPool = mockAgent.get('https://dataset.address-br.digital.go.jp');
+      mockPool.intercept({
+          path: '/api/search/v1/collections/all/items?filter=((group IN (864dfb9be4ef483d864e886fa25e1c94)))%20AND%20((categories%20IN%20(%2Fcategories%2F%E5%B8%82%E5%8C%BA%E7%94%BA%E6%9D%91%E3%83%AC%E3%83%99%E3%83%AB%2F%E9%A6%99%E5%B7%9D%E7%9C%8C)))&limit=12&q=%E9%A6%99%E5%B7%9D%E7%9C%8C%E9%AB%98%E6%9D%BE%E5%B8%82',
+          method: 'GET',
+        }).reply(
+          404,
+          "Not Found"
+        );
+
+      await assert.rejects(
+        hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+        new Error('HUB API returned an error: 404 Not Found')
+      );
+
+      await mockAgent.close();
+      setGlobalDispatcher(new Agent());
+    });
+
+    await test('getHubItemsByQuery should handle fetch error when network is disconnected', async () => {
+      const mockAgent = new MockAgent();
+      setGlobalDispatcher(mockAgent);
+      mockAgent.disableNetConnect();
+
+      await assert.rejects(
+        hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+        new TypeError('fetch failed')
+      );
+
+      await mockAgent.close();
+      setGlobalDispatcher(new Agent());
+    });
   });
-  */
 
-  await test('getHubItemById should find existing data', async () => {
-    const res = await hub.getHubItemById('45bcb60e4dc747b58def5493ab829825');
-    assert.strictEqual(res.properties.title, '全国 都道府県マスター');
-    assert.strictEqual(res.properties.id, '45bcb60e4dc747b58def5493ab829825');
-  });
+  await test.describe('getHubItemById', async () => {
+    await test('getHubItemById should find existing data', async () => {
+      const res = await hub.getHubItemById('45bcb60e4dc747b58def5493ab829825');
+      assert.strictEqual(res.properties.title, '全国 都道府県マスター');
+      assert.strictEqual(res.properties.id, '45bcb60e4dc747b58def5493ab829825');
+    });
 
-  await test('getHubItemById should raise exception for non-existing data', async () => {
-    await assert.rejects(
-      hub.getHubItemById('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'),
-      /HUB API returned an error: {"message":"Cannot find item with recordId xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx in collection All","error":"Not Found","statusCode":404}/
-    );
+    await test('getHubItemById should raise exception for non-existing data', async () => {
+      await assert.rejects(
+        hub.getHubItemById('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'),
+        new Error('HUB API returned an error: {"message":"Cannot find item with recordId xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx in collection All","error":"Not Found","statusCode":404}')
+      );
+    });
   });
 
   await test.describe('downloadAndExtract', async () => {
@@ -76,7 +129,7 @@ await test.describe('hub', async () => {
       const res = hub.downloadAndExtract<Record<string, string>>('https://data.address-br.digital.go.jp/mt_town/city/mt_town_cityXXXXXX.csv.zip');
       await assert.rejects(
         res.next(),
-        /HTTP 404: Not Found/
+        new Error('HTTP 404: Not Found')
       );
     });
   });

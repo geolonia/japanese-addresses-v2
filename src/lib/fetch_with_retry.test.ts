@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import test from 'node:test';
-import { Response, MockAgent, setGlobalDispatcher } from 'undici';
+import { Response, MockAgent, setGlobalDispatcher, Agent } from 'undici';
 import { fetchWithRetry } from './fetch_with_retry.js';
 
 await test('fetchWithRetry should fetch successfully', async () => {
@@ -45,4 +45,21 @@ await test('fetchWithRetry should respect retries option', async () => {
 
   // Restore undici dispatcher
   await mockAgent.close();
+  setGlobalDispatcher(new Agent());
+});
+
+await test('fetchWithRetry should raise exception when network is disconnected', async () => {
+  // Set up undici MockAgent
+  const mockAgent = new MockAgent();
+  setGlobalDispatcher(mockAgent);
+  mockAgent.disableNetConnect();
+
+  await assert.rejects(
+    fetchWithRetry('https://example.com/'),
+    new TypeError('fetch failed')
+  );
+
+  // Restore undici dispatcher
+  await mockAgent.close();
+  setGlobalDispatcher(new Agent());
 });
