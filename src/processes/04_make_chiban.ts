@@ -138,7 +138,7 @@ async function main(argv: string[]) {
       }
       let area = `${ma.pref} ${ma.county}${ma.city}`;
       if (ma.ward !== '') {
-        area += ` ${ma.ward}`;
+        area += `${ma.ward}`;
       }
       const searchQuery = `${area} 地番マスター`;
       const results = await getHubItemsByQuery(`${area} 地番マスター`, '市区町村レベル', ma.pref);
