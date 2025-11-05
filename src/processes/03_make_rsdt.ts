@@ -147,7 +147,7 @@ async function outputRsdtData(outDir: string, outFilename: string, apiData: Rsdt
   // const outFilePbf = path.join(outDir, 'ja', outFilename + '.pbf');
   // fs.writeFileSync(outFilePbf, serializeApiDataPbf(apiData));
 
-  console.log(`${outFilename}-住居表示: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字を出力した`);
+  console.log(`${outFilename}-住居表示: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字の住居表示を出力した`);
 }
 
 async function main(argv: string[]) {
