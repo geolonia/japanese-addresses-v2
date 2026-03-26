@@ -101,6 +101,10 @@ async function main(argv: string[]) {
       }
 
       const maData = JSON.parse(await fs.promises.readFile(`${cityPrefix}.json`, 'utf8')) as MachiAzaApi;
+      // CSVレンジを一旦全クリア
+      for (const ma of maData.data) {
+        ma.csv_ranges = undefined;
+      }
       for (const headerRow of chibanHeader || []) {
         const ma = maData.data.find((ma) => machiAzaName(ma) === headerRow.name);
         if (ma) {
