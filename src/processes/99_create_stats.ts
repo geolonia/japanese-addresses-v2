@@ -70,9 +70,19 @@ async function main(argv: string[]) {
 
   for (const pref of ja.data) {
     for (const lg of pref.cities) {
-      const machiAzaJSON = await fs.promises.readFile(path.join(
+      const machiAzaPath = path.join(
         dataDir, 'ja', prefectureName(pref), `${cityName(lg)}.json`
-      ), 'utf-8');
+      );
+      let machiAzaJSON: string;
+      try {
+        machiAzaJSON = await fs.promises.readFile(machiAzaPath, 'utf-8');
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+          console.warn(`町字データなし: ${prefectureName(pref)} ${cityName(lg)} (${lg.code}) — skip`);
+          continue;
+        }
+        throw e;
+      }
       const machiAza = JSON.parse(machiAzaJSON) as MachiAzaApi;
       stats.machiAzaCount += machiAza.data.length;
 
