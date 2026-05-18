@@ -13,7 +13,11 @@ import { PrefectureName } from './prefecture_name_codes.js';
 const HUB_BASE_REGISTRY_URL = `https://dataset.address-br.digital.go.jp/api/search/v1`;
 const HUB_GROUP_ID = '864dfb9be4ef483d864e886fa25e1c94';
 const USER_AGENT = 'curl/8.7.1';
-const CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
+const DEFAULT_CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
+
+function getCacheDir(): string {
+  return process.env.CACHE_DIR || DEFAULT_CACHE_DIR;
+}
 
 export type HubSearchResultList = GeoJSON.FeatureCollection & {
   timestamp: Date,
@@ -46,7 +50,7 @@ export async function getHubItemsByQuery(
   sortBy?: 'title' | 'created' | 'modified'
 ): Promise<HubSearchResultList> {
   const cacheKey = `hub_items_by_query_${query}_${categoryLevel}_${categoryPref}_${sortBy}.json`;
-  const cacheFile = path.join(CACHE_DIR, 'hub', cacheKey);
+  const cacheFile = path.join(getCacheDir(), 'hub', cacheKey);
 
   let json: HubSearchResultList;
   if (fs.existsSync(cacheFile)) {
@@ -91,7 +95,7 @@ export async function getHubItemsByQuery(
 
 export async function getHubItemById(id: string): Promise<HubSearchResult> {
   const cacheKey = `hub_item_by_id_${id}.json`;
-  const cacheFile = path.join(CACHE_DIR, 'hub', cacheKey);
+  const cacheFile = path.join(getCacheDir(), 'hub', cacheKey);
 
   let json: HubSearchResult;
   if (fs.existsSync(cacheFile)) {
