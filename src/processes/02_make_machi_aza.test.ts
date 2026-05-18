@@ -4,9 +4,11 @@ import test from 'node:test';
 import fs from 'node:fs/promises';
 import main from './02_make_machi_aza.js';
 import { MachiAzaApi } from '../data.js';
+import { setupFixtureCache } from '../test_helpers/fixture_cache.js';
 
 await test.describe('with filter for 452092 (宮崎県えびの市)', async () => {
   test.before(() => {
+    setupFixtureCache('processes_02_make_machi_aza');
     process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['452092'] });
   });
 

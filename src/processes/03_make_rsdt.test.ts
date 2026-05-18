@@ -4,9 +4,11 @@ import test from 'node:test';
 import fs from 'node:fs/promises';
 import main from './03_make_rsdt.js';
 import { getRangesFromCSV } from './10_refresh_csv_ranges.js';
+import { setupFixtureCache } from '../test_helpers/fixture_cache.js';
 
 await test.describe('with filter for 131059 (東京都文京区)', async () => {
   test.before(() => {
+    setupFixtureCache('processes_03_make_rsdt');
     process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['131059'] });
   });
 
