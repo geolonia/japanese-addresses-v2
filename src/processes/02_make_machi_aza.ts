@@ -35,7 +35,6 @@ async function main(argv: string[]) {
   for (const prefName of Object.keys(prefectureNameCodes)) {
     const prefCode = prefectureNameCodes[prefName];
     // settings.lgCodes でフィルタが指定されている場合、該当しない都道府県の処理をスキップする
-    // (03_make_rsdt.ts と同様の最適化)
     if (!lgCodeMatch(settings, `${prefCode}000`)) {
       continue;
     }
