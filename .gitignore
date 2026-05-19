@@ -3,6 +3,7 @@ dist
 build
 out
 cache
+!test/fixtures/cache
 .envrc
 *.0x
 *.7z

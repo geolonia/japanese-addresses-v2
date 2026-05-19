@@ -10,9 +10,11 @@ import mainChiban from './04_make_chiban.js';
 
 import main from './10_refresh_csv_ranges.js'
 import { MachiAzaApi } from '../data.js';
+import { setupFixtureCache } from '../test_helpers/fixture_cache.js';
 
 await test.describe('with filter for 302015 (和歌山県和歌山市)', async () => {
   test.before(() => {
+    setupFixtureCache('processes_10_refresh_csv_ranges');
     process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['302015'] });
   });
 

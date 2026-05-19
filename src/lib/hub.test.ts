@@ -7,6 +7,12 @@ import { MockAgent, setGlobalDispatcher, Agent } from 'undici';
 import * as hub from './hub.js';
 
 const CACHE_HUB_DIR = path.join(import.meta.dirname, '..', '..', 'cache', 'hub');
+const CACHE_FILES_DIR = path.join(import.meta.dirname, '..', '..', 'cache', 'files');
+const FIXTURES_DIR = path.join(import.meta.dirname, '..', '..', 'test', 'fixtures', 'lib', 'hub');
+
+function urlToCacheKey(url: string): string {
+  return url.replace(/[^a-zA-Z0-9]/g, '_');
+}
 
 await describe('hub', async () => {
   beforeEach(() => {
@@ -112,25 +118,71 @@ await describe('hub', async () => {
   });
 
   await test.describe('downloadAndExtract', async () => {
-    await test('should download, unzip, and parse the CSV file', async () => {
-      const res = hub.downloadAndExtract<Record<string, string>>('https://data.address-br.digital.go.jp/mt_town/city/mt_town_city372013.csv.zip');
-      let count = 0;
-      for await (const row of res) {
-        count += 1;
-        // make sure all rows are parsed, and the header row is not in the results
-        assert.strictEqual(row['lg_code'], '372013');
-        assert.strictEqual(row['pref'], '香川県');
-        assert.strictEqual(row['city'], '高松市');
+    // ABRデータの配信CDN (data.address-br.digital.go.jp) が日本国外からのアクセスを
+    // 403で拒否するため、CI(US基盤のGitHub Actions runner)からは実ネットワークでテストできない。
+    // MockAgentでレスポンスを差し替えてオフライン実行可能にする。
+    beforeEach(() => {
+      const targets = [
+        'https://data.address-br.digital.go.jp/mt_town/city/mt_town_city372013.csv.zip',
+        'https://data.address-br.digital.go.jp/mt_town/city/mt_town_cityXXXXXX.csv.zip',
+      ];
+      for (const url of targets) {
+        const cacheFile = path.join(CACHE_FILES_DIR, urlToCacheKey(url));
+        if (fs.existsSync(cacheFile)) {
+          fs.rmSync(cacheFile);
+        }
       }
-      assert.ok(count > 0);
+    });
+
+    await test('should download, unzip, and parse the CSV file', async () => {
+      const fixtureZip = fs.readFileSync(path.join(FIXTURES_DIR, 'mt_town_city372013.csv.zip'));
+
+      const mockAgent = new MockAgent();
+      setGlobalDispatcher(mockAgent);
+      const mockPool = mockAgent.get('https://data.address-br.digital.go.jp');
+      mockPool.intercept({
+        path: '/mt_town/city/mt_town_city372013.csv.zip',
+        method: 'GET',
+      }).reply(200, fixtureZip, {
+        headers: { 'content-type': 'application/octet-stream' },
+      });
+
+      try {
+        const res = hub.downloadAndExtract<Record<string, string>>('https://data.address-br.digital.go.jp/mt_town/city/mt_town_city372013.csv.zip');
+        let count = 0;
+        for await (const row of res) {
+          count += 1;
+          // make sure all rows are parsed, and the header row is not in the results
+          assert.strictEqual(row['lg_code'], '372013');
+          assert.strictEqual(row['pref'], '香川県');
+          assert.strictEqual(row['city'], '高松市');
+        }
+        assert.ok(count > 0);
+      } finally {
+        await mockAgent.close();
+        setGlobalDispatcher(new Agent());
+      }
     });
 
     await test('should raise exception for non-existing data download', async () => {
-      const res = hub.downloadAndExtract<Record<string, string>>('https://data.address-br.digital.go.jp/mt_town/city/mt_town_cityXXXXXX.csv.zip');
-      await assert.rejects(
-        res.next(),
-        new Error('HTTP 404: Not Found')
-      );
+      const mockAgent = new MockAgent();
+      setGlobalDispatcher(mockAgent);
+      const mockPool = mockAgent.get('https://data.address-br.digital.go.jp');
+      mockPool.intercept({
+        path: '/mt_town/city/mt_town_cityXXXXXX.csv.zip',
+        method: 'GET',
+      }).reply(404, 'Not Found');
+
+      try {
+        const res = hub.downloadAndExtract<Record<string, string>>('https://data.address-br.digital.go.jp/mt_town/city/mt_town_cityXXXXXX.csv.zip');
+        await assert.rejects(
+          res.next(),
+          new Error('HTTP 404: Not Found')
+        );
+      } finally {
+        await mockAgent.close();
+        setGlobalDispatcher(new Agent());
+      }
     });
   });
 });
