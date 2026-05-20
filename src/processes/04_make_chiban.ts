@@ -14,6 +14,7 @@ import { ChibanData, ChibanPosData } from '../lib/abr_data/chiban.js';
 import { mergeDataLeftJoin } from '../lib/abr_data/index.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
+const CONCURRENCY = parseInt(process.env.CHIBAN_CONCURRENCY ?? '4', 10);
 
 type ChibanApi = {
   machiAza: SingleMachiAza;
@@ -29,15 +30,17 @@ type HeaderRow = {
 function serializeApiDataTxt(apiData: ChibanApi): { headerIterations: number, headerData: HeaderRow[], data: Buffer } {
   const outSections: Buffer[] = [];
   for ( const { machiAza, chibans } of apiData ) {
-    let outSection = `地番,${machiAzaName(machiAza)}\n` +
-                     `prc_num1,prc_num2,prc_num3,lng,lat\n`;
+    const lines: string[] = [
+      `地番,${machiAzaName(machiAza)}`,
+      `prc_num1,prc_num2,prc_num3,lng,lat`,
+    ];
     for (const chiban of chibans) {
-      outSection += `${chiban.prc_num1},${chiban.prc_num2 || ''},${chiban.prc_num3 || ''},${chiban.point?.[0] || ''},${chiban.point?.[1] || ''}\n`;
+      lines.push(`${chiban.prc_num1},${chiban.prc_num2 || ''},${chiban.prc_num3 || ''},${chiban.point?.[0] || ''},${chiban.point?.[1] || ''}`);
     }
-    outSections.push(Buffer.from(outSection, 'utf8'));
+    outSections.push(Buffer.from(lines.join('\n') + '\n', 'utf8'));
   }
 
-  const createHeader = (iterations = 1) => {
+  const createHeader = (iterations = 1): { iterations: number, data: HeaderRow[], buffer: Buffer } => {
     let header = '';
     const headerMaxSize = HEADER_CHUNK_SIZE * iterations;
     let lastBytePos = headerMaxSize;
@@ -80,8 +83,6 @@ async function outputChibanData(outDir: string, outFilename: string, apiData: Ch
   if (apiData.length === 0) {
     return;
   }
-  // const machiAzaJSON = path.join(outDir, 'ja', outFilename + '.json');
-  // await fs.promises.writeFile(outFile, JSON.stringify(apiData, null, 2));
 
   const outFileTXT = path.join(outDir, 'ja', outFilename + '-地番.txt');
   const txt = serializeApiDataTxt(apiData);
@@ -89,6 +90,72 @@ async function outputChibanData(outDir: string, outFilename: string, apiData: Ch
   await fs.promises.writeFile(outFileTXT, txt.data);
 
   console.log(`${outFilename}: ${apiData.length.toString(10).padEnd(4, ' ')} 件の町字の地番を出力した`);
+}
+
+async function processCity(
+  ma: MachiAzaData,
+  machiAzaDataByCode: Map<string, MachiAzaData>,
+  outDir: string,
+): Promise<void> {
+  let area = `${ma.pref} ${ma.county}${ma.city}`;
+  if (ma.ward !== '') {
+    area += ma.ward;
+  }
+  const searchQuery = `${area} 地番マスター`;
+  const results = await getHubItemsByQuery(`${area} 地番マスター`, '市区町村レベル', ma.pref);
+  const chibanDataRef = findResultByTypeAndArea(results.features, '地番マスター', area);
+  const chibanPosDataRef = findResultByTypeAndArea(results.features, '地番マスター位置参照拡張', area);
+  if (!chibanDataRef) {
+    console.error(`Insufficient data found for ${searchQuery} (地番マスター)`);
+    return;
+  }
+
+  const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.properties.id);
+  const posStream = chibanPosDataRef ?
+    getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.properties.id)
+    :
+    // 位置参照拡張データが無い場合もある
+    (async function*() {})();
+
+  const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id', 'prc_id'], true);
+
+  let currentMachiAza: MachiAzaData | undefined = undefined;
+  const apiData: ChibanApi = [];
+  let currentChibanList: SingleChiban[] = [];
+  for await (const raw of rawData) {
+    const maEntry = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
+    if (!maEntry) {
+      continue;
+    }
+    if (currentMachiAza && (currentMachiAza.machiaza_id !== maEntry.machiaza_id || currentMachiAza.lg_code !== maEntry.lg_code)) {
+      apiData.push({
+        machiAza: rawToMachiAza(currentMachiAza),
+        chibans: currentChibanList,
+      });
+      currentChibanList = [];
+      currentMachiAza = maEntry;
+    }
+    if (!currentMachiAza) {
+      currentMachiAza = maEntry;
+    }
+
+    currentChibanList.push({
+      prc_num1: raw.prc_num1,
+      prc_num2: raw.prc_num2 !== '' ? raw.prc_num2 : undefined,
+      prc_num3: raw.prc_num3 !== '' ? raw.prc_num3 : undefined,
+      point: 'rep_srid' in raw ? projectABRData(raw) : undefined,
+    });
+  }
+  if (currentMachiAza && currentChibanList.length > 0) {
+    apiData.push({
+      machiAza: rawToMachiAza(currentMachiAza),
+      chibans: currentChibanList,
+    });
+  }
+  await outputChibanData(outDir, path.join(
+    ma.pref,
+    `${ma.county}${ma.city}${ma.ward}`,
+  ), apiData);
 }
 
 async function main(argv: string[]) {
@@ -106,19 +173,21 @@ async function main(argv: string[]) {
     `${ma.lg_code}|${ma.machiaza_id}`,
     ma
   ]));
+
+  // One representative entry per lg_code, in encounter order.
+  const seenLgCodes = new Set<string>();
   const machiAzas: MachiAzaData[] = [];
   for (const ma of machiAzaData) {
-    if (machiAzas.findIndex((c) => c.lg_code === ma.lg_code) > 0) {
-      continue;
-    }
+    if (seenLgCodes.has(ma.lg_code)) continue;
+    seenLgCodes.add(ma.lg_code);
     machiAzas.push(ma);
   }
   console.log('事前準備: 町字データを取得しました');
 
   const progress = new cliProgress.SingleBar({
     format: ' {bar} {percentage}% | ETA: {eta_formatted} | {value}/{total}',
-    barCompleteChar: '\u2588',
-    barIncompleteChar: '\u2591',
+    barCompleteChar: '█',
+    barIncompleteChar: '░',
     etaBuffer: 30,
     fps: 2,
     // No-TTY output is required for CI/CD environments
@@ -126,79 +195,19 @@ async function main(argv: string[]) {
   });
   progress.start(machiAzas.length, 0);
   try {
-
-    let currentLgCode: string | undefined = undefined;
+    const executing = new Set<Promise<void>>();
     for (const ma of machiAzas) {
-      if (currentLgCode && ma.lg_code === currentLgCode) {
-        // we have already processed this lg_code, so we can skip it
-        progress.increment();
-        continue;
-      } else if (currentLgCode !== ma.lg_code) {
-        currentLgCode = ma.lg_code;
-      }
-      let area = `${ma.pref} ${ma.county}${ma.city}`;
-      if (ma.ward !== '') {
-        area += `${ma.ward}`;
-      }
-      const searchQuery = `${area} 地番マスター`;
-      const results = await getHubItemsByQuery(`${area} 地番マスター`, '市区町村レベル', ma.pref);
-      const chibanDataRef = findResultByTypeAndArea(results.features, '地番マスター', area);
-      const chibanPosDataRef = findResultByTypeAndArea(results.features, '地番マスター位置参照拡張', area);
-      if (!chibanDataRef) {
-        console.error(`Insufficient data found for ${searchQuery} (地番マスター)`);
-        progress.increment();
-        continue;
-      }
-
-      const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.properties.id);
-      const posStream = chibanPosDataRef ?
-        getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.properties.id)
-        :
-        // 位置参照拡張データが無い場合もある
-        (async function*() {})();
-
-      const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id', 'prc_id'], true);
-      // console.log(`処理: ${ma.pref} ${ma.county}${ma.city} ${ma.ward} の地番データを処理中...`);
-
-      let currentMachiAza: MachiAzaData | undefined = undefined;
-      const apiData: ChibanApi = [];
-      let currentChibanList: SingleChiban[] = [];
-      for await (const raw of rawData) {
-        const ma = machiAzaDataByCode.get(`${raw.lg_code}|${raw.machiaza_id}`);
-        if (!ma) {
-          continue;
-        }
-        if (currentMachiAza && (currentMachiAza.machiaza_id !== ma.machiaza_id || currentMachiAza.lg_code !== ma.lg_code)) {
-          apiData.push({
-            machiAza: rawToMachiAza(currentMachiAza),
-            chibans: currentChibanList,
-          });
-          currentChibanList = [];
-          currentMachiAza = ma;
-        }
-        if (!currentMachiAza) {
-          currentMachiAza = ma;
-        }
-
-        currentChibanList.push({
-          prc_num1: raw.prc_num1,
-          prc_num2: raw.prc_num2 !== '' ? raw.prc_num2 : undefined,
-          prc_num3: raw.prc_num3 !== '' ? raw.prc_num3 : undefined,
-          point: 'rep_srid' in raw ? projectABRData(raw) : undefined,
+      const p: Promise<void> = processCity(ma, machiAzaDataByCode, outDir)
+        .finally(() => {
+          executing.delete(p);
+          progress.increment();
         });
+      executing.add(p);
+      if (executing.size >= CONCURRENCY) {
+        await Promise.race(executing);
       }
-      if (currentMachiAza && currentChibanList.length > 0) {
-        apiData.push({
-          machiAza: rawToMachiAza(currentMachiAza),
-          chibans: currentChibanList,
-        });
-      }
-      await outputChibanData(outDir, path.join(
-        ma.pref,
-        `${ma.county}${ma.city}${ma.ward}`,
-      ), apiData);
-      progress.increment();
     }
+    await Promise.all(executing);
   } finally {
     progress.stop();
   }

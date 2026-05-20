@@ -28,12 +28,14 @@ type HeaderRow = {
 function serializeApiDataTxt(apiData: RsdtApi): { headerIterations: number, headerData: HeaderRow[], data: Buffer } {
   const outSections: Buffer[] = [];
   for ( const { machiAza, rsdts } of apiData ) {
-    let outSection = `住居表示,${machiAzaName(machiAza)}\n` +
-                     `blk_num,rsdt_num,rsdt_num2,lng,lat\n`;
+    const lines: string[] = [
+      `住居表示,${machiAzaName(machiAza)}`,
+      `blk_num,rsdt_num,rsdt_num2,lng,lat`,
+    ];
     for (const rsdt of rsdts) {
-      outSection += `${rsdt.blk_num || ''},${rsdt.rsdt_num},${rsdt.rsdt_num2 || ''},${rsdt.point?.[0] || ''},${rsdt.point?.[1] || ''}\n`;
+      lines.push(`${rsdt.blk_num || ''},${rsdt.rsdt_num},${rsdt.rsdt_num2 || ''},${rsdt.point?.[0] || ''},${rsdt.point?.[1] || ''}`);
     }
-    outSections.push(Buffer.from(outSection, 'utf8'));
+    outSections.push(Buffer.from(lines.join('\n') + '\n', 'utf8'));
   }
 
   const createHeader = (iterations = 1) => {

@@ -11,13 +11,24 @@ function _createKey(data: any, keys: string[]): string {
 }
 
 export async function *mergeDataLeftJoin<T, U>(left: AsyncIterableIterator<T>, right: AsyncIterableIterator<U>, keys: string[], memory: boolean = false): AsyncIterableIterator<(T | T & U)> {
-  let tmpDbPath = ":memory:";
-
-  if (!memory) {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "merge-data-left-join-"));
-    tmpDbPath = path.join(tmpDir, "db.sqlite3");
-    console.log(`Creating temporary database: ${tmpDbPath}`);
+  if (memory) {
+    // Fast path: load right side into a Map then stream left, avoiding SQLite and JSON round-trips.
+    const rightMap = new Map<string, U>();
+    for await (const data of right) {
+      rightMap.set(_createKey(data, keys), data);
+    }
+    for await (const data of left) {
+      const rightData = rightMap.get(_createKey(data, keys));
+      yield (rightData !== undefined
+        ? Object.assign({}, data, rightData)
+        : data) as T | (T & U);
+    }
+    return;
   }
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "merge-data-left-join-"));
+  const tmpDbPath = path.join(tmpDir, "db.sqlite3");
+  console.log(`Creating temporary database: ${tmpDbPath}`);
 
   const db = new Database(tmpDbPath);
   db.pragma("synchronous = OFF");
@@ -64,7 +75,5 @@ export async function *mergeDataLeftJoin<T, U>(left: AsyncIterableIterator<T>, r
   }
 
   db.close();
-  if (!memory) {
-    await fs.rm(path.dirname(tmpDbPath), { recursive: true });
-  }
+  await fs.rm(path.dirname(tmpDbPath), { recursive: true });
 }
