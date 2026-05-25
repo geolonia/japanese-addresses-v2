@@ -4,9 +4,11 @@ import test from 'node:test';
 import fs from 'node:fs/promises';
 import main from './04_make_chiban.js';
 import { getRangesFromCSV } from './10_refresh_csv_ranges.js';
+import { setupFixtureCache } from '../test_helpers/fixture_cache.js';
 
 await test.describe('with filter for 465054 (鹿児島県熊毛郡屋久島町)', async () => {
   test.before(() => {
+    setupFixtureCache('processes_04_make_chiban');
     process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['465054'] });
   });
 

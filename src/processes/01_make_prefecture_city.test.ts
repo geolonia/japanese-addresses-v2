@@ -4,9 +4,11 @@ import test from 'node:test';
 import fs from 'node:fs/promises';
 import main from './01_make_prefecture_city.js';
 import { PrefectureApi } from '../data.js';
+import { setupFixtureCache } from '../test_helpers/fixture_cache.js';
 
 await test.describe('with Hokkaido filter', async () => {
   test.before(() => {
+    setupFixtureCache('processes_01_make_prefecture_city');
     process.env.SETTINGS_JSON = JSON.stringify({ lgCodes: ['^01'] });
   });
 
