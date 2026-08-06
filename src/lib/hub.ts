@@ -32,7 +32,8 @@ function getCacheDir(): string {
 
 export type HubSearchResultList = GeoJSON.FeatureCollection & {
   timestamp: Date,
-  numberMatched: number,
+  /** limit が HUB_MAX_LIMIT を超えるとレスポンスから省かれる (実測) */
+  numberMatched?: number,
   numberReturned: number,
   features: HubSearchResult[],
 }
@@ -55,13 +56,16 @@ export type HubSearchError = {
 }
 
 /**
- * 検索結果が limit で切り捨てられている (全一致件数より返却件数が少ない) かどうか。
+ * 検索結果が limit で切り捨てられている (全一致件数より返却件数が少ない) 可能性があるか。
  * 切り捨てられていると、目的のデータセットが結果から漏れて静かにデータ欠落する。
+ *
+ * numberMatched が返らない場合は判定できないため、安全側に倒して true を返します。
+ * 「切り捨てられていない」と確定できないケースを false にすると、呼び出し側が
+ * データ欠落を「元々存在しない」と誤って扱ってしまうためです。
  */
-export function isTruncated(json: HubSearchResultList): boolean {
-  // limit が HUB_MAX_LIMIT を超えると numberMatched が返らず判定できない
+export function mayBeTruncated(json: HubSearchResultList): boolean {
   if (typeof json.numberMatched !== 'number') {
-    return false;
+    return true;
   }
   return json.numberMatched > json.numberReturned;
 }
@@ -78,7 +82,7 @@ function warnIfTruncated(json: HubSearchResultList, query: string): void {
     );
     return;
   }
-  if (isTruncated(json)) {
+  if (mayBeTruncated(json)) {
     console.warn(
       `HUB API の検索結果が limit=${SEARCH_RESULT_LIMIT} で切り捨てられました `
       + `(query: ${query}, numberMatched: ${json.numberMatched}, numberReturned: ${json.numberReturned})。`

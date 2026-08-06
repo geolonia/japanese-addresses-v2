@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import cliProgress from 'cli-progress';
 
-import { getHubItemsByQuery, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId, isTruncated } from '../lib/hub.js';
+import { getHubItemsByQuery, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId, mayBeTruncated } from '../lib/hub.js';
 import { machiAzaName, SingleChiban, SingleMachiAza } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
 import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
@@ -151,13 +151,13 @@ async function main(argv: string[]) {
       }
 
       if (!chibanPosDataRef) {
-        if (isTruncated(results)) {
+        if (mayBeTruncated(results)) {
           // 検索結果が切り捨てられている場合、データセットは存在するのに枠外へ
           // 落ちている可能性がある。座標なしで出力してしまうと気づけないため明示する。
           console.error(
             `「${area} 地番マスター位置参照拡張」が検索結果に見つかりませんでしたが、`
-            + `検索結果が切り捨てられています `
-            + `(numberMatched: ${results.numberMatched}, numberReturned: ${results.numberReturned})。`
+            + `検索結果が切り捨てられている可能性があります `
+            + `(numberMatched: ${results.numberMatched ?? '不明'}, numberReturned: ${results.numberReturned})。`
             + `データセットが存在するのに取得できていない可能性があります。`
           );
         } else {

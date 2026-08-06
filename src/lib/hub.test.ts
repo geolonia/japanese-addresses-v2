@@ -54,10 +54,12 @@ await describe('hub', async () => {
           .reply(200, readJsonFixture('search_takamatsu_city_level.json'));
 
         const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
-        assert.ok(res.numberMatched > 0);
+        // SEARCH_RESULT_LIMIT が API の上限以下なら numberMatched は必ず返る
+        assert.strictEqual(typeof res.numberMatched, 'number');
+        assert.ok(res.numberMatched! > 0);
         assert.strictEqual(res.features.length, res.numberReturned);
         // 切り捨てが起きると numberReturned < numberMatched になる
-        assert.ok(res.numberMatched >= res.numberReturned);
+        assert.ok(res.numberMatched! >= res.numberReturned);
         assert.ok(
           hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'),
           '「香川県 高松市 地番マスター」が結果に含まれること'
@@ -177,9 +179,11 @@ await describe('hub', async () => {
 
     await test('getHubItemsByQuery should match the live API [network]', { skip: skipNetworkTests }, async () => {
       const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
-      assert.ok(res.numberMatched > 0);
+      // 実APIでも SEARCH_RESULT_LIMIT が上限以下である限り numberMatched は返る
+      assert.strictEqual(typeof res.numberMatched, 'number');
+      assert.ok(res.numberMatched! > 0);
       assert.strictEqual(res.features.length, res.numberReturned);
-      assert.ok(res.numberMatched >= res.numberReturned);
+      assert.ok(res.numberMatched! >= res.numberReturned);
       assert.ok(hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'));
 
       const none = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');
@@ -187,21 +191,22 @@ await describe('hub', async () => {
     });
   });
 
-  await test.describe('isTruncated', async () => {
+  await test.describe('mayBeTruncated', async () => {
     const asResultList = (partial: Partial<hub.HubSearchResultList>) =>
       partial as hub.HubSearchResultList;
 
     await test('should be false when all matched results are returned', () => {
-      assert.strictEqual(hub.isTruncated(asResultList({ numberMatched: 4, numberReturned: 4 })), false);
+      assert.strictEqual(hub.mayBeTruncated(asResultList({ numberMatched: 4, numberReturned: 4 })), false);
     });
 
     await test('should be true when the results are truncated', () => {
-      assert.strictEqual(hub.isTruncated(asResultList({ numberMatched: 153, numberReturned: 100 })), true);
+      assert.strictEqual(hub.mayBeTruncated(asResultList({ numberMatched: 153, numberReturned: 100 })), true);
     });
 
-    await test('should be false when numberMatched is missing', () => {
-      // limit が API の上限を超えると numberMatched が返らず、切り捨てを判定できない
-      assert.strictEqual(hub.isTruncated(asResultList({ numberReturned: 100 })), false);
+    await test('should be true when numberMatched is missing', () => {
+      // limit が API の上限を超えると numberMatched が返らず判定できないため、
+      // 「切り捨てられていない」と誤認しないよう安全側に倒す
+      assert.strictEqual(hub.mayBeTruncated(asResultList({ numberReturned: 100 })), true);
     });
   });
 
