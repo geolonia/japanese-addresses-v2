@@ -75,6 +75,33 @@ await describe('hub', async () => {
       });
     });
 
+    await test('getHubItemsByQuery should warn when the result is truncated', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // numberMatched > numberReturned = limit で切り捨てられた状態を再現する
+        const truncated = {
+          ...readJsonFixture('search_takamatsu_city_level.json'),
+          numberMatched: 120,
+          numberReturned: 50,
+        };
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, truncated);
+
+        const warnings: string[] = [];
+        const originalWarn = console.warn;
+        console.warn = (...args: unknown[]) => { warnings.push(args.join(' ')); };
+        try {
+          await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        } finally {
+          console.warn = originalWarn;
+        }
+
+        assert.strictEqual(warnings.length, 1, '切り捨て時に警告が1件出ること');
+        assert.match(warnings[0], /切り捨てられました/);
+        assert.match(warnings[0], /numberMatched: 120/);
+      });
+    });
+
     await test('getHubItemsByQuery should handle hub handled error', async () => {
       await withMockAgent(async (mockAgent) => {
         mockAgent.get(HUB_ORIGIN)

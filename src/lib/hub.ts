@@ -12,6 +12,10 @@ import { PrefectureName } from './prefecture_name_codes.js';
 
 const HUB_BASE_REGISTRY_URL = `https://dataset.address-br.digital.go.jp/api/search/v1`;
 const HUB_GROUP_ID = '864dfb9be4ef483d864e886fa25e1c94';
+// 1クエリあたりの取得件数上限。1市区町村あたりのデータセットは数件程度だが、
+// 将来データセットが増えて上限に達すると、目的のデータセットが結果から漏れて
+// 静かにデータ欠落する。上限に達した場合は警告を出す (warnIfTruncated 参照)。
+const SEARCH_RESULT_LIMIT = 50;
 const USER_AGENT = 'curl/8.7.1';
 const DEFAULT_CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
 
@@ -43,6 +47,19 @@ export type HubSearchError = {
   statusCode: number,
 }
 
+// 検索結果が limit で切り捨てられた場合に警告する。
+// 04_make_chiban は目的のデータセットが見つからないと console.error して継続するため、
+// 切り捨てに気づかないとデータ欠落が静かに起きる。
+function warnIfTruncated(json: HubSearchResultList, query: string): void {
+  if (json.numberMatched > json.numberReturned) {
+    console.warn(
+      `HUB API の検索結果が limit=${SEARCH_RESULT_LIMIT} で切り捨てられました `
+      + `(query: ${query}, numberMatched: ${json.numberMatched}, numberReturned: ${json.numberReturned})。`
+      + `SEARCH_RESULT_LIMIT の引き上げが必要です。`
+    );
+  }
+}
+
 export async function getHubItemsByQuery(
   query: string,
   categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
@@ -65,7 +82,7 @@ export async function getHubItemsByQuery(
     }
     let url = `${HUB_BASE_REGISTRY_URL}/collections/all/items?`
       + `filter=((group IN (${HUB_GROUP_ID})))${encodeURIComponent(categoryPart)}`
-      + '&limit=12'
+      + `&limit=${SEARCH_RESULT_LIMIT}`
       + `&q=${encodeURIComponent(query)}`;
     if (sortBy) {
       url += `&sortBy=-properties.${sortBy}`;
@@ -89,6 +106,9 @@ export async function getHubItemsByQuery(
     await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
     await fs.promises.writeFile(cacheFile, JSON.stringify(json));
   }
+
+  // キャッシュ済みのレスポンスでも切り捨ては起きているので、キャッシュ判定の外で検査する
+  warnIfTruncated(json, query);
 
   return json;
 }
