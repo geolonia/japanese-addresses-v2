@@ -17,17 +17,11 @@ await test.describe('with filter for 465054 (鹿児島県熊毛郡屋久島町)'
   });
 
   await test('it generates the API', async () => {
-    try {
-      await fs.rm('./out/api_kagoshima_yakushima', { recursive: true, force: true });
-      await main(['', '', './out/api_kagoshima_yakushima']);
-      assert.ok(true);
+    await fs.rm('./out/api_kagoshima_yakushima', { recursive: true, force: true });
+    await main(['', '', './out/api_kagoshima_yakushima']);
 
-      const headers = await getRangesFromCSV('./out/api_kagoshima_yakushima/ja/鹿児島県/熊毛郡屋久島町-地番.txt');
-      assert(typeof headers !== 'undefined');
-      assert.equal(headers[0].name, '安房');
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
+    const headers = await getRangesFromCSV('./out/api_kagoshima_yakushima/ja/鹿児島県/熊毛郡屋久島町-地番.txt');
+    assert(typeof headers !== 'undefined');
+    assert.equal(headers[0].name, '安房');
   });
 });
