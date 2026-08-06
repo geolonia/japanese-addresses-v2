@@ -141,7 +141,7 @@ async function main(argv: string[]) {
         area += `${ma.ward}`;
       }
       const searchQuery = `${area} 地番マスター`;
-      const results = await getHubItemsByQuery(`${area} 地番マスター`, '市区町村レベル', ma.pref);
+      const results = await getHubItemsByQuery(searchQuery, '市区町村レベル', ma.pref);
       const chibanDataRef = findResultByTypeAndArea(results.features, '地番マスター', area);
       const chibanPosDataRef = findResultByTypeAndArea(results.features, '地番マスター位置参照拡張', area);
       if (!chibanDataRef) {
