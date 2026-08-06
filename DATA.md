@@ -10,15 +10,15 @@
 * 町字マスター (位置参照拡張とセットのものは全国データなし、それぞれの都道府県個別でダウンロード)
   * (都道府県) `mt_town_prefXX`, 位置参照拡張 `mt_town_pos_prefXX`
   * [北海道 町字マスター (`mt_town_pref01`)](https://dataset.address-br.digital.go.jp/documents/b9cfb40acf6d4986b49d3d467d491551/about), [位置参照拡張 (`mt_town_pos_pref01`)](https://dataset.address-br.digital.go.jp/documents/9cdc66c63cd44df0a76b8df4c95e1446/about)
-* [全国 町字マスター (`mt_town_pref`)](https://dataset.address-br.digital.go.jp/documents/b80e77a0e2d24e5692be4af885eb3de7/about)
+* [全国 町字マスター (`mt_town_all`)](https://dataset.address-br.digital.go.jp/documents/b80e77a0e2d24e5692be4af885eb3de7/about)
   * ※以下の住居表示-住居マスター・地番マスター変換時に一時的に利用
 * 住居表示-住居マスター (全国データなし、それぞれの都道府県個別でダウンロード)
-  * (都道府県) `mt_rsdtdsp_rsdt_prefXX`, 位置参照拡張 `mt_rsdtdsp_pos_prefXX`
+  * (都道府県) `mt_rsdtdsp_rsdt_prefXX`, 位置参照拡張 `mt_rsdtdsp_rsdt_pos_prefXX`
   * [北海道 住居表示-住居マスター (`mt_rsdtdsp_rsdt_pref01`)](https://dataset.address-br.digital.go.jp/documents/0ebf085bd6354742b9755b36e20612d9/about), [位置参照拡張 (`mt_rsdtdsp_rsdt_pos_pref01`)](https://dataset.address-br.digital.go.jp/documents/2d3a458126c649d19d5f13cc90dc2a60/about)
 * 地番マスター (全国データなし、それぞれの市区町村個別でダウンロード)
   * (都道府県)(市区町村) `mt_parcel_cityXXXXXX`, 位置参照拡張 `mt_parcel_pos_cityXXXXXX`
   * [北海道 札幌市中央区 地番マスター (`mt_parcel_city011011`)](https://dataset.address-br.digital.go.jp/documents/d457223f85d3496baad76e6d3eb21d21/about), [位置参照拡張 (`mt_parcel_pos_city011011`)](https://dataset.address-br.digital.go.jp/documents/c2ba90dcb6df494da9b5fddfd16c3e36/about)
 
-## 国土交通庁 位置参照情報
+## 国土交通省 位置参照情報
 
 * [大字・町丁目レベル 都道府県単位 (令和5年度)](https://nlftp.mlit.go.jp/cgi-bin/isj/dls/_choose_method.cgi)
