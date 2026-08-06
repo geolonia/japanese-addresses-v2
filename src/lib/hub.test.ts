@@ -55,7 +55,9 @@ await describe('hub', async () => {
 
         const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
         assert.ok(res.numberMatched > 0);
-        assert.ok(res.features.length >= res.numberMatched);
+        assert.strictEqual(res.features.length, res.numberReturned);
+        // 切り捨てが起きると numberReturned < numberMatched になる
+        assert.ok(res.numberMatched >= res.numberReturned);
         assert.ok(
           hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'),
           '「香川県 高松市 地番マスター」が結果に含まれること'
@@ -72,6 +74,34 @@ await describe('hub', async () => {
         const res = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');
         assert.ok(res.numberMatched === 0);
         assert.ok(res.features.length === 0);
+      });
+    });
+
+    await test('getHubItemsByQuery should not reuse a cache saved with a different limit', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // limit を含まない旧形式のキャッシュを配置しても読まれないことを確認する。
+        // 旧キャッシュは小さい limit で切り捨てられている可能性があるため。
+        const staleCacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined.json'
+        );
+        fs.mkdirSync(path.dirname(staleCacheFile), { recursive: true });
+        fs.writeFileSync(staleCacheFile, JSON.stringify({
+          type: 'FeatureCollection',
+          numberMatched: 12,
+          numberReturned: 12,
+          features: [],
+        }));
+
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, readJsonFixture('search_takamatsu_city_level.json'));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        // 旧キャッシュ (numberMatched: 12 / features: 0) ではなく、実際に取得した結果が返る
+        assert.strictEqual(res.numberMatched, 4);
+        assert.ok(res.features.length > 0);
       });
     });
 
@@ -148,7 +178,8 @@ await describe('hub', async () => {
     await test('getHubItemsByQuery should match the live API [network]', { skip: skipNetworkTests }, async () => {
       const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
       assert.ok(res.numberMatched > 0);
-      assert.ok(res.features.length >= res.numberMatched);
+      assert.strictEqual(res.features.length, res.numberReturned);
+      assert.ok(res.numberMatched >= res.numberReturned);
       assert.ok(hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'));
 
       const none = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');

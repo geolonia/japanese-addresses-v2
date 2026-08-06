@@ -66,7 +66,9 @@ export async function getHubItemsByQuery(
   categoryPref?: PrefectureName,
   sortBy?: 'title' | 'created' | 'modified'
 ): Promise<HubSearchResultList> {
-  const cacheKey = `hub_items_by_query_${query}_${categoryLevel}_${categoryPref}_${sortBy}.json`;
+  // limit はレスポンスの内容 (切り捨ての有無) を左右するのでキャッシュキーに含める。
+  // 含めないと、より小さい limit で保存された切り捨て済みのキャッシュを読み続けてしまう。
+  const cacheKey = `hub_items_by_query_${query}_${categoryLevel}_${categoryPref}_${sortBy}_limit${SEARCH_RESULT_LIMIT}.json`;
   const cacheFile = path.join(getCacheDir(), 'hub', cacheKey);
 
   let json: HubSearchResultList;
