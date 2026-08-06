@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import cliProgress from 'cli-progress';
 
-import { getHubItemsByQuery, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/hub.js';
+import { getHubItemsByQuery, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId, isTruncated } from '../lib/hub.js';
 import { machiAzaName, SingleChiban, SingleMachiAza } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
 import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
@@ -150,11 +150,26 @@ async function main(argv: string[]) {
         continue;
       }
 
+      if (!chibanPosDataRef) {
+        if (isTruncated(results)) {
+          // 検索結果が切り捨てられている場合、データセットは存在するのに枠外へ
+          // 落ちている可能性がある。座標なしで出力してしまうと気づけないため明示する。
+          console.error(
+            `「${area} 地番マスター位置参照拡張」が検索結果に見つかりませんでしたが、`
+            + `検索結果が切り捨てられています `
+            + `(numberMatched: ${results.numberMatched}, numberReturned: ${results.numberReturned})。`
+            + `データセットが存在するのに取得できていない可能性があります。`
+          );
+        } else {
+          // 位置参照拡張が配信されていない市区町村もあるため、座標なしで続行する
+          console.warn(`「${area} 地番マスター位置参照拡張」は配信されていないため、座標なしで出力します`);
+        }
+      }
+
       const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.properties.id);
       const posStream = chibanPosDataRef ?
         getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.properties.id)
         :
-        // 位置参照拡張データが無い場合もある
         (async function*() {})();
 
       const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id', 'prc_id'], true);

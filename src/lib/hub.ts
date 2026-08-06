@@ -12,10 +12,17 @@ import { PrefectureName } from './prefecture_name_codes.js';
 
 const HUB_BASE_REGISTRY_URL = `https://dataset.address-br.digital.go.jp/api/search/v1`;
 const HUB_GROUP_ID = '864dfb9be4ef483d864e886fa25e1c94';
-// 1クエリあたりの取得件数上限。1市区町村あたりのデータセットは数件程度だが、
-// 将来データセットが増えて上限に達すると、目的のデータセットが結果から漏れて
-// 静かにデータ欠落する。上限に達した場合は警告を出す (warnIfTruncated 参照)。
-const SEARCH_RESULT_LIMIT = 50;
+// HUB API が受け付ける limit の上限。これを超える値を指定するとレスポンスから
+// numberMatched が消え、切り捨ての検知ができなくなる (実測で確認)。
+const HUB_MAX_LIMIT = 100;
+// 1クエリあたりの取得件数上限 (HUB_MAX_LIMIT 以下にすること)。
+//
+// 検索クエリはスペース区切りの語として扱われるため、都道府県名と同名の市
+// (長野県長野市など) では県内の全市区町村がマッチして件数が膨らむ。実測では
+// numberMatched が 2〜153件、目的のデータセットを含むのに必要な件数は最大22件
+// (岐阜県岐阜市の地番マスター位置参照拡張が22番目)だった。
+// 旧実装の limit=12 では、この位置参照拡張が枠外に落ちて座標なしで出力されていた。
+const SEARCH_RESULT_LIMIT = HUB_MAX_LIMIT;
 const USER_AGENT = 'curl/8.7.1';
 const DEFAULT_CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
 
@@ -47,15 +54,35 @@ export type HubSearchError = {
   statusCode: number,
 }
 
+/**
+ * 検索結果が limit で切り捨てられている (全一致件数より返却件数が少ない) かどうか。
+ * 切り捨てられていると、目的のデータセットが結果から漏れて静かにデータ欠落する。
+ */
+export function isTruncated(json: HubSearchResultList): boolean {
+  // limit が HUB_MAX_LIMIT を超えると numberMatched が返らず判定できない
+  if (typeof json.numberMatched !== 'number') {
+    return false;
+  }
+  return json.numberMatched > json.numberReturned;
+}
+
 // 検索結果が limit で切り捨てられた場合に警告する。
 // 04_make_chiban は目的のデータセットが見つからないと console.error して継続するため、
 // 切り捨てに気づかないとデータ欠落が静かに起きる。
 function warnIfTruncated(json: HubSearchResultList, query: string): void {
-  if (json.numberMatched > json.numberReturned) {
+  if (typeof json.numberMatched !== 'number') {
+    console.warn(
+      `HUB API が numberMatched を返しませんでした (query: ${query})。`
+      + `SEARCH_RESULT_LIMIT=${SEARCH_RESULT_LIMIT} が API の上限 (${HUB_MAX_LIMIT}) を超えている可能性があります。`
+      + `このままでは検索結果の切り捨てを検知できません。`
+    );
+    return;
+  }
+  if (isTruncated(json)) {
     console.warn(
       `HUB API の検索結果が limit=${SEARCH_RESULT_LIMIT} で切り捨てられました `
       + `(query: ${query}, numberMatched: ${json.numberMatched}, numberReturned: ${json.numberReturned})。`
-      + `SEARCH_RESULT_LIMIT の引き上げが必要です。`
+      + `目的のデータセットが結果に含まれていない場合はデータが欠落します。`
     );
   }
 }

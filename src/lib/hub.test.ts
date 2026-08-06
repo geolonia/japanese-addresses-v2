@@ -187,6 +187,24 @@ await describe('hub', async () => {
     });
   });
 
+  await test.describe('isTruncated', async () => {
+    const asResultList = (partial: Partial<hub.HubSearchResultList>) =>
+      partial as hub.HubSearchResultList;
+
+    await test('should be false when all matched results are returned', () => {
+      assert.strictEqual(hub.isTruncated(asResultList({ numberMatched: 4, numberReturned: 4 })), false);
+    });
+
+    await test('should be true when the results are truncated', () => {
+      assert.strictEqual(hub.isTruncated(asResultList({ numberMatched: 153, numberReturned: 100 })), true);
+    });
+
+    await test('should be false when numberMatched is missing', () => {
+      // limit が API の上限を超えると numberMatched が返らず、切り捨てを判定できない
+      assert.strictEqual(hub.isTruncated(asResultList({ numberReturned: 100 })), false);
+    });
+  });
+
   await test.describe('getHubItemById', async () => {
     await test('getHubItemById should find existing data', async () => {
       await withMockAgent(async (mockAgent) => {
