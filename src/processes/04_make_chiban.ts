@@ -5,13 +5,13 @@ import path from 'node:path';
 
 import cliProgress from 'cli-progress';
 
-import { ckanPackageSearch, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/ckan.js';
+import { getHubItemsByQuery, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/hub.js';
 import { machiAzaName, SingleChiban, SingleMachiAza } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
-import { MachiAzaData } from '../lib/ckan_data/machi_aza.js';
+import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
 import { rawToMachiAza } from './02_machi_aza.js';
-import { ChibanData, ChibanPosData } from '../lib/ckan_data/chiban.js';
-import { mergeDataLeftJoin } from '../lib/ckan_data/index.js';
+import { ChibanData, ChibanPosData } from '../lib/abr_data/chiban.js';
+import { mergeDataLeftJoin } from '../lib/abr_data/index.js';
 
 const HEADER_CHUNK_SIZE = 50_000;
 
@@ -96,7 +96,12 @@ async function main(argv: string[]) {
   fs.mkdirSync(outDir, { recursive: true });
 
   console.log('事前準備: 町字データを取得中...');
-  const machiAzaData = await getAndParseCSVDataForId<MachiAzaData>('ba-o1-000000_g2-000003'); // 市区町村 & 町字
+  const machiAzaResults = await getHubItemsByQuery('町字マスター', '全国レベル');
+  const machiAzaResult = findResultByTypeAndArea(machiAzaResults.features, '町字マスター', '全国');
+  if (!machiAzaResult) {
+    throw new Error(`「全国 町字マスター」データセットが見つかりませんでした`);
+  }
+  const machiAzaData = await getAndParseCSVDataForId<MachiAzaData>(machiAzaResult.properties.id); // 市区町村 & 町字
   const machiAzaDataByCode = new Map(machiAzaData.map((ma) => [
     `${ma.lg_code}|${ma.machiaza_id}`,
     ma
@@ -133,21 +138,21 @@ async function main(argv: string[]) {
       }
       let area = `${ma.pref} ${ma.county}${ma.city}`;
       if (ma.ward !== '') {
-        area += ` ${ma.ward}`;
+        area += `${ma.ward}`;
       }
       const searchQuery = `${area} 地番マスター`;
-      const results = await ckanPackageSearch(searchQuery);
-      const chibanDataRef = findResultByTypeAndArea(results, '地番マスター（市区町村）', area);
-      const chibanPosDataRef = findResultByTypeAndArea(results, '地番マスター位置参照拡張（市区町村）', area);
+      const results = await getHubItemsByQuery(`${area} 地番マスター`, '市区町村レベル', ma.pref);
+      const chibanDataRef = findResultByTypeAndArea(results.features, '地番マスター', area);
+      const chibanPosDataRef = findResultByTypeAndArea(results.features, '地番マスター位置参照拡張', area);
       if (!chibanDataRef) {
         console.error(`Insufficient data found for ${searchQuery} (地番マスター)`);
         progress.increment();
         continue;
       }
 
-      const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.name);
+      const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.properties.id);
       const posStream = chibanPosDataRef ?
-        getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.name)
+        getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.properties.id)
         :
         // 位置参照拡張データが無い場合もある
         (async function*() {})();

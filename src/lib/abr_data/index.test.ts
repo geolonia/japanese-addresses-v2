@@ -3,7 +3,7 @@ import test, { describe } from 'node:test';
 
 import * as index from './index.js';
 
-await describe('ckan_data/index', async () => {
+await describe('abr_data/index', async () => {
   await describe('joinAsyncIterators', async () => {
     await test('it correctly joins two async iterators when they are ordered', async () => {
       const one = async function*(){
