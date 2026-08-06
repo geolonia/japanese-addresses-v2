@@ -1,0 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [],
+  "timestamp": "2026-08-06T06:48:33.780Z",
+  "numberMatched": 0,
+  "numberReturned": 0,
+  "links": [
+    {
+      "rel": "self",
+      "type": "application/geo+json",
+      "title": "This document as GeoJSON",
+      "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items"
+    },
+    {
+      "rel": "collection",
+      "type": "application/json",
+      "title": "All",
+      "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all"
+    }
+  ]
+}
