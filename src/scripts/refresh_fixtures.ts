@@ -68,6 +68,17 @@ const SPECS: FixtureSpec[] = [
   },
 ];
 
+// zipエントリ名に `../` が含まれると、展開先が workDir の外へ解決されてしまう。
+// 書き込み前に workDir 配下であることを検証する。
+function resolveInsideWorkDir(workDir: string, entryPath: string): string {
+  const resolved = path.resolve(workDir, entryPath);
+  const relative = path.relative(workDir, resolved);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Unsafe zip entry path: ${entryPath}`);
+  }
+  return resolved;
+}
+
 async function filterZipByLgCode(srcPath: string, destPath: string, lgCodes: string[]): Promise<void> {
   const settings = parseSettings({ lgCodes });
   const srcBuffer = fs.readFileSync(srcPath);
@@ -80,7 +91,7 @@ async function filterZipByLgCode(srcPath: string, destPath: string, lgCodes: str
       const header = rows[0];
       const filtered = [header, ...rows.slice(1).filter((row) => lgCodeMatch(settings, row[0]))];
       const outCsv = filtered.map((row) => row.join(',')).join('\n') + '\n';
-      fs.writeFileSync(path.join(workDir, entry.path), outCsv);
+      fs.writeFileSync(resolveInsideWorkDir(workDir, entry.path), outCsv);
       innerPath = entry.path;
       break; // 最初のCSVのみ処理(ABR配信zipは1ファイル前提)
     }
