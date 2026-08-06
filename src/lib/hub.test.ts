@@ -5,24 +5,15 @@ import { describe, test, beforeEach } from 'node:test';
 import { MockAgent, setGlobalDispatcher, Agent } from 'undici';
 
 import * as hub from './hub.js';
+import { createTempCacheDir } from '../test_helpers/fixture_cache.js';
 
-const CACHE_HUB_DIR = path.join(import.meta.dirname, '..', '..', 'cache', 'hub');
-const CACHE_FILES_DIR = path.join(import.meta.dirname, '..', '..', 'cache', 'files');
 const FIXTURES_DIR = path.join(import.meta.dirname, '..', '..', 'test', 'fixtures', 'lib', 'hub');
 
-function urlToCacheKey(url: string): string {
-  return url.replace(/[^a-zA-Z0-9]/g, '_');
-}
-
 await describe('hub', async () => {
+  // テスト毎に空の一時 CACHE_DIR を割り当てる。リポジトリ直下の cache/ を消すと
+  // ローカルの実データキャッシュや CI の actions/cache (path: cache) を壊すため。
   beforeEach(() => {
-    if (fs.existsSync(CACHE_HUB_DIR)) {
-      try {
-        fs.rmSync(CACHE_HUB_DIR, { recursive: true });
-      } catch (err) {
-        console.error('Error cleaning up cache directory:', err);
-      }
-    }
+    createTempCacheDir('lib_hub');
   });
 
   await test.describe('getHubItemsByQuery', async () => {
@@ -121,18 +112,7 @@ await describe('hub', async () => {
     // ABRデータの配信CDN (data.address-br.digital.go.jp) が日本国外からのアクセスを
     // 403で拒否するため、CI(US基盤のGitHub Actions runner)からは実ネットワークでテストできない。
     // MockAgentでレスポンスを差し替えてオフライン実行可能にする。
-    beforeEach(() => {
-      const targets = [
-        'https://data.address-br.digital.go.jp/mt_town/city/mt_town_city372013.csv.zip',
-        'https://data.address-br.digital.go.jp/mt_town/city/mt_town_cityXXXXXX.csv.zip',
-      ];
-      for (const url of targets) {
-        const cacheFile = path.join(CACHE_FILES_DIR, urlToCacheKey(url));
-        if (fs.existsSync(cacheFile)) {
-          fs.rmSync(cacheFile);
-        }
-      }
-    });
+    // ファイルキャッシュは外側の beforeEach が割り当てる空の一時 CACHE_DIR を使う。
 
     await test('should download, unzip, and parse the CSV file', async () => {
       const fixtureZip = fs.readFileSync(path.join(FIXTURES_DIR, 'mt_town_city372013.csv.zip'));
