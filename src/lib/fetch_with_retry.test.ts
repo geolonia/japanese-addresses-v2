@@ -62,6 +62,54 @@ await test('fetchWithRetry should not retry on a non-retryable HTTP status', asy
   });
 });
 
+await test('fetchWithRetry should retry on a retryable HTTP status', async () => {
+  await withMockAgent(async (mockAgent) => {
+    let attempts = 0;
+    mockAgent.get('https://example.com')
+      .intercept({ path: '/unavailable', method: 'GET' })
+      .reply(() => {
+        attempts += 1;
+        return { statusCode: 503, data: 'Service Unavailable' };
+      })
+      .persist();
+
+    // 最終試行でも解消しなかった場合は、そのレスポンスを呼び出し元に返す
+    const res = await fetchWithRetry('https://example.com/unavailable', undefined, 2);
+    assert.strictEqual(res.status, 503);
+    assert.strictEqual(attempts, 2, 'Should retry on 503');
+  });
+});
+
+await test('fetchWithRetry should return the response once a retry succeeds', async () => {
+  await withMockAgent(async (mockAgent) => {
+    const mockPool = mockAgent.get('https://example.com');
+    mockPool.intercept({ path: '/flaky', method: 'GET' }).reply(503, 'Service Unavailable');
+    mockPool.intercept({ path: '/flaky', method: 'GET' }).reply(200, 'OK');
+
+    const res = await fetchWithRetry('https://example.com/flaky', undefined, 2);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(await res.text(), 'OK');
+  });
+});
+
+await test('fetchWithRetry should not retry on 403', async () => {
+  await withMockAgent(async (mockAgent) => {
+    let attempts = 0;
+    mockAgent.get('https://example.com')
+      .intercept({ path: '/forbidden', method: 'GET' })
+      .reply(() => {
+        attempts += 1;
+        return { statusCode: 403, data: 'Forbidden' };
+      })
+      .persist();
+
+    // ABRデータ配信CDNの国外アクセス制限は恒久的な拒否なので、再試行しても無駄になる
+    const res = await fetchWithRetry('https://example.com/forbidden');
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(attempts, 1, 'Should not retry on 403');
+  });
+});
+
 await test('fetchWithRetry should raise exception when network is disconnected', async () => {
   await withMockAgent(async () => {
     await assert.rejects(
