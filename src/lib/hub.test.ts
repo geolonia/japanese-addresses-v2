@@ -17,6 +17,29 @@ const skipNetworkTests = process.env.RUN_NETWORK_TESTS
   ? false
   : 'RUN_NETWORK_TESTS=1 を指定すると実行されます';
 
+// console.warn / console.log を差し替えて fn を実行し、戻り値と出力をまとめて返す。
+// ページ追随のテストは戻り値と出力の両方を見るため、各テストに try/finally を書くと
+// 同じ定型が並ぶ。戻り値をここから返すことで、呼び出し側で `let res;` を宣言せずに済み
+// (try の外に置くと推論が効かず明示的な型注釈が要る)、ログのノイズも抑えられる。
+async function withCapturedConsole<T>(fn: () => Promise<T>): Promise<{
+  result: T,
+  warnings: string[],
+  logs: string[],
+}> {
+  const warnings: string[] = [];
+  const logs: string[] = [];
+  const originalWarn = console.warn;
+  const originalLog = console.log;
+  console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+  console.log = (...args: unknown[]) => { logs.push(args.map(String).join(' ')); };
+  try {
+    return { result: await fn(), warnings, logs };
+  } finally {
+    console.warn = originalWarn;
+    console.log = originalLog;
+  }
+}
+
 function readJsonFixture(name: string): object {
   return JSON.parse(fs.readFileSync(path.join(FIXTURES_DIR, name), 'utf-8')) as object;
 }
@@ -216,15 +239,10 @@ await describe('hub', async () => {
           .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
           .reply(200, makePage(undefined, [makeFeature('id-1', 'ダミー1')]));
 
-        const warnings: string[] = [];
-        const originalWarn = console.warn;
-        console.warn = (...args: unknown[]) => { warnings.push(args.join(' ')); };
-        try {
-          const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
-          assert.strictEqual(res.features.length, 1);
-        } finally {
-          console.warn = originalWarn;
-        }
+        const { result: res, warnings } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
+        assert.strictEqual(res.features.length, 1);
         assert.strictEqual(warnings.length, 1);
         assert.match(warnings[0], /numberMatched を返しませんでした/);
       });
@@ -244,16 +262,11 @@ await describe('hub', async () => {
           .intercept({ path: pathWithStartIndex(3, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
           .reply(200, makePage(8, []));
 
-        const warnings: string[] = [];
-        const originalWarn = console.warn;
-        console.warn = (...args: unknown[]) => { warnings.push(args.join(' ')); };
-        try {
-          const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
-          assert.strictEqual(res.features.length, 2);
-          assert.strictEqual(res.numberReturned, 2);
-        } finally {
-          console.warn = originalWarn;
-        }
+        const { result: res, warnings } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
+        assert.strictEqual(res.features.length, 2);
+        assert.strictEqual(res.numberReturned, 2);
         assert.strictEqual(warnings.length, 1, '全件取れなかったので警告が1件出ること');
         // numberMatched (8) 自体は返っているので、「numberMatched が無い」ケースの警告ではなく
         // 「切り捨てられた」ケースの警告であることを本文で確認する。
@@ -327,16 +340,13 @@ await describe('hub', async () => {
             makeFeature('id-10', 'ダミー10'),
           ]));
 
-        const warnings: string[] = [];
-        const originalWarn = console.warn;
-        console.warn = (...args: unknown[]) => { warnings.push(args.join(' ')); };
-        let res;
-        try {
-          res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
-        } finally {
-          console.warn = originalWarn;
-        }
+        const { result: res, warnings } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
 
+        // 型注釈は省略できない。HubSearchResultList は GeoJSON.FeatureCollection との
+        // 交差型で、features の要素型も交差になる結果 properties が null を含みうると
+        // 判定される。HubSearchResult と明示すると null 側が潰れて解決する。
         const ids = res.features.map((f: hub.HubSearchResult) => f.properties.id);
         assert.strictEqual(ids.length, new Set(ids).size, '重複が排除されていること');
         assert.deepStrictEqual(
@@ -367,14 +377,9 @@ await describe('hub', async () => {
           })
           .times(hub.MAX_SEARCH_PAGES + 1);
 
-        const warnings: string[] = [];
-        const originalWarn = console.warn;
-        console.warn = (...args: unknown[]) => { warnings.push(args.join(' ')); };
-        try {
-          await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
-        } finally {
-          console.warn = originalWarn;
-        }
+        const { warnings } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
 
         assert.strictEqual(requestCount, hub.MAX_SEARCH_PAGES, `リクエストが ${hub.MAX_SEARCH_PAGES} 回で止まること`);
         assert.strictEqual(warnings.length, 1, '警告は1本だけ (打ち切りと切り捨てで二重に出さない)');
@@ -429,15 +434,9 @@ await describe('hub', async () => {
           features: [{ id: 'id-1', type: 'Feature', geometry: null, properties: { id: 'id-1', title: 'ダミー1' } }],
         }));
 
-        const warnings: string[] = [];
-        const originalWarn = console.warn;
-        console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
-        let res;
-        try {
-          res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
-        } finally {
-          console.warn = originalWarn;
-        }
+        const { result: res, warnings } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
 
         assert.strictEqual(res.numberMatched, 10, 'キャッシュがそのまま使われること');
         assert.deepStrictEqual(warnings, [], '切り捨て警告を出さないこと');
