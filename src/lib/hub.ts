@@ -56,6 +56,16 @@ export type HubSearchResultList = GeoJSON.FeatureCollection & {
   numberReturned: number,
   features: HubSearchResult[],
   links?: HubLink[],
+  /**
+   * API のレスポンスには無く、fetchAllSearchPages が付与する内部フラグ。
+   * numberMatched 件分をサーバから取得し切った (= 全範囲を歩き切った) ことを表す。
+   *
+   * 重複排除で numberReturned が numberMatched を下回っても取りこぼしではないため、
+   * 件数の比較だけでは切り捨てと区別できない。その事実をここに残して mayBeTruncated が使う。
+   * 結合結果と一緒にキャッシュへ書かれるので、このフラグの付いていない古いキャッシュは
+   * 従来どおり件数比較で判定される (undefined = 判定材料なし)。
+   */
+  fetchedAllPages?: boolean,
 }
 
 export type HubSearchResult = GeoJSON.Feature & {
@@ -102,12 +112,11 @@ function buildCacheKey(search: HubSearchQuery): string {
 
 /**
  * 全件取得できたと確定できない可能性があるか。
- * ページ追随の導入後は limit による切り捨てが直接の原因になることはなく、ページ数の上限
- * (MAX_SEARCH_PAGES) に達した、重複排除で件数が減った、あるいは API 自体が numberMatched
- * より少ない件数しか返していない、といった事情で全件取得を確認できないケースを指す。
+ * ページ数の上限 (MAX_SEARCH_PAGES) に達した、あるいは API 自体が numberMatched より
+ * 少ない件数しか返していない、といった事情で全件取得を確認できないケースを指す。
  * これが true のままだと、目的のデータセットが結果から漏れて静かにデータ欠落する。
  *
- * numberMatched が返らない場合は判定できないため、安全側に倒して true を返します。
+ * 判定材料が欠けている場合は判定できないため、安全側に倒して true を返します。
  * 「切り捨てられていない」と確定できないケースを false にすると、呼び出し側が
  * データ欠落を「元々存在しない」と誤って扱ってしまうためです。
  *
@@ -116,7 +125,17 @@ function buildCacheKey(search: HubSearchQuery): string {
  * コメントを参照。
  */
 export function mayBeTruncated(json: HubSearchResultList): boolean {
+  // サーバ側の全範囲を歩き切ったのなら、ページ間の重複排除で numberReturned が
+  // numberMatched を下回っていても取りこぼしではない。件数の比較より先に見る。
+  if (json.fetchedAllPages === true) {
+    return false;
+  }
   if (typeof json.numberMatched !== 'number') {
+    return true;
+  }
+  // numberReturned が数値でないと `153 > undefined` が false になり、
+  // 「全件取得できている」と誤って信用してしまう (numberMatched 欠落と同じく安全側に倒す)。
+  if (typeof json.numberReturned !== 'number') {
     return true;
   }
   return json.numberMatched > json.numberReturned;
@@ -143,7 +162,6 @@ function warnIfTruncated(json: HubSearchResultList, query: string): void {
       `HUB API の検索結果を全件取得できませんでした `
       + `(query: ${query}, numberMatched: ${json.numberMatched}, numberReturned: ${json.numberReturned})。`
       + `最大 ${MAX_SEARCH_PAGES} ページ (${MAX_SEARCH_PAGES * SEARCH_RESULT_LIMIT} 件) で打ち切られたか、`
-      + `ページ間の重複を排除して件数が減ったか、`
       + `API が numberMatched より少ない件数しか返していません。`
       + `目的のデータセットが結果に含まれていない場合はデータが欠落します。`
     );
@@ -261,6 +279,10 @@ async function fetchAllSearchPages(search: HubSearchQuery): Promise<HubSearchRes
     ...firstPage,
     features: mergedFeatures,
     numberReturned: mergedFeatures.length,
+    // ループを抜けた理由が「numberMatched 件分を取り切ったから」なら全範囲を歩き切っている。
+    // 重複排除で numberReturned が減っていても取りこぼしではないことを、件数ではなく
+    // この事実で伝える (numberMatched が無い場合は確認しようがないので false)。
+    fetchedAllPages: typeof numberMatched === 'number' && fetchedCount >= numberMatched,
     // 結合済みの結果をキャッシュに書くので、「まだ続きがある」と読める next は残さない
     links: firstPage.links?.filter((link) => link.rel !== 'next'),
   };
@@ -285,10 +307,12 @@ export async function getHubItemsByQuery(
     // 一度も走らずデータ欠落が残る。
     //
     // これは一度限りの移行措置ではなく、実行ごとに毎回行う恒常的なヘルスチェックである。
-    // ページ数上限 (MAX_SEARCH_PAGES) に達した、重複排除で件数が減った、あるいは API 自体が
-    // numberMatched より少ない件数しか返す、といった理由で numberMatched に到達できない
-    // クエリは、仕様として毎回このチェックに引っかかり、再取得と警告の再送が続く
+    // ページ数上限 (MAX_SEARCH_PAGES) に達した、あるいは API 自体が numberMatched より
+    // 少ない件数しか返さない、といった理由で numberMatched に到達できないクエリは、
+    // 仕様として毎回このチェックに引っかかり、再取得と警告の再送が続く
     // (実測でパイプライン全体につき数リクエスト程度で無視できるコスト)。
+    // なお、ページ間の重複排除で件数が減っただけのキャッシュは fetchedAllPages が付くので
+    // ここには引っかからない (全範囲を歩き切っており、再取得しても結果は変わらないため)。
     // 「古いキャッシュの一時対応」と誤読してバージョン番号などによる一回限りの判定に
     // 置き換えると、この分岐が守っている切り捨て検知そのものが無効化されるので注意。
     if (!mayBeTruncated(cached)) {

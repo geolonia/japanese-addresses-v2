@@ -346,12 +346,11 @@ await describe('hub', async () => {
         );
         assert.strictEqual(res.numberReturned, 9, 'numberReturned は重複排除後の件数');
 
-        // numberMatched: 10 に対し重複排除後は 9 件しかないため、切り捨て扱いの警告が出る。
-        // 「重複排除によって全件取得できたのに切り捨てに見える」という既知のトレードオフを
-        // ここでテスト・文書化する (捨てるだけの capture にしない)。
-        assert.strictEqual(warnings.length, 1);
-        assert.match(warnings[0], /全件取得できませんでした/);
-        assert.match(warnings[0], /numberReturned: 9/);
+        // numberMatched: 10 に対し重複排除後は 9 件だが、サーバ側の 10 件分は歩き切っている。
+        // 件数だけを比べると切り捨てに見えてしまうため、完走した事実で判定する。
+        assert.strictEqual(res.fetchedAllPages, true, '全範囲を歩き切ったことが記録されること');
+        assert.strictEqual(hub.mayBeTruncated(res), false, '重複排除による件数減を切り捨て扱いしないこと');
+        assert.deepStrictEqual(warnings, [], '取りこぼしは無いので警告を出さないこと');
       });
     });
 
@@ -407,6 +406,41 @@ await describe('hub', async () => {
         const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
         assert.strictEqual(res.features.length, 2);
         assert.strictEqual(res.numberMatched, 2);
+      });
+    });
+
+    await test('getHubItemsByQuery should reuse a deduped cache without refetching', async () => {
+      await withMockAgent(async () => {
+        // 重複排除で numberReturned (9) が numberMatched (10) を下回っているが、
+        // 全範囲は歩き切っているキャッシュ。件数だけで判定すると毎回再取得され、
+        // 04 では位置参照拡張の警告が console.error に昇格してしまう。
+        // intercept は登録しないので、再取得が起きればフェッチが失敗してテストが落ちる。
+        const cacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined_limit100.json'
+        );
+        fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+        fs.writeFileSync(cacheFile, JSON.stringify({
+          type: 'FeatureCollection',
+          numberMatched: 10,
+          numberReturned: 9,
+          fetchedAllPages: true,
+          features: [{ id: 'id-1', type: 'Feature', geometry: null, properties: { id: 'id-1', title: 'ダミー1' } }],
+        }));
+
+        const warnings: string[] = [];
+        const originalWarn = console.warn;
+        console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+        let res;
+        try {
+          res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        } finally {
+          console.warn = originalWarn;
+        }
+
+        assert.strictEqual(res.numberMatched, 10, 'キャッシュがそのまま使われること');
+        assert.deepStrictEqual(warnings, [], '切り捨て警告を出さないこと');
       });
     });
 
@@ -556,6 +590,21 @@ await describe('hub', async () => {
       // limit が API の上限を超えると numberMatched が返らず判定できないため、
       // 「切り捨てられていない」と誤認しないよう安全側に倒す
       assert.strictEqual(hub.mayBeTruncated(asResultList({ numberReturned: 100 })), true);
+    });
+
+    await test('should be true when numberReturned is missing', () => {
+      // numberMatched 欠落と同じく判定材料が無い。比較に任せると
+      // `153 > undefined` が false になり「全件取得できている」と誤認する
+      assert.strictEqual(hub.mayBeTruncated(asResultList({ numberMatched: 153 })), true);
+    });
+
+    await test('should be false when all pages were fetched despite a lower numberReturned', () => {
+      // ページ間の重複を排除すると numberReturned は numberMatched を下回るが、
+      // サーバ側の全範囲は歩き切っているので取りこぼしではない
+      assert.strictEqual(
+        hub.mayBeTruncated(asResultList({ numberMatched: 10, numberReturned: 9, fetchedAllPages: true })),
+        false,
+      );
     });
   });
 
