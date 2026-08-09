@@ -23,6 +23,11 @@ const HUB_MAX_LIMIT = 100;
 // (岐阜県岐阜市の地番マスター位置参照拡張が22番目)だった。
 // 旧実装の limit=12 では、この位置参照拡張が枠外に落ちて座標なしで出力されていた。
 const SEARCH_RESULT_LIMIT = HUB_MAX_LIMIT;
+
+// 1クエリで辿る最大ページ数。API 側の異常で numberMatched が過大に返り続けた場合の
+// 暴走防止。10ページ = 1000件で、実測の最大は153件 (長野県長野市, 2026-08-09)。
+export const MAX_SEARCH_PAGES = 10;
+
 const USER_AGENT = 'curl/8.7.1';
 const DEFAULT_CACHE_DIR = path.join(import.meta.dirname, '..', '..', 'cache');
 
@@ -80,9 +85,12 @@ export function mayBeTruncated(json: HubSearchResultList): boolean {
   return json.numberMatched > json.numberReturned;
 }
 
-// 検索結果が limit で切り捨てられた場合に警告する。
+// 検索結果を全件取得できなかった場合に警告する。
 // 04_make_chiban は目的のデータセットが見つからないと console.error して継続するため、
-// 切り捨てに気づかないとデータ欠落が静かに起きる。
+// 欠落に気づかないとデータ欠落が静かに起きる。
+//
+// ページ追随の打ち切りを報告する唯一の場所。fetchAllSearchPages 側では警告を出さない
+// (同じ事象に警告が2本出るため)。
 function warnIfTruncated(json: HubSearchResultList, query: string): void {
   if (typeof json.numberMatched !== 'number') {
     console.warn(
@@ -94,8 +102,10 @@ function warnIfTruncated(json: HubSearchResultList, query: string): void {
   }
   if (mayBeTruncated(json)) {
     console.warn(
-      `HUB API の検索結果が limit=${SEARCH_RESULT_LIMIT} で切り捨てられました `
+      `HUB API の検索結果を全件取得できませんでした `
       + `(query: ${query}, numberMatched: ${json.numberMatched}, numberReturned: ${json.numberReturned})。`
+      + `最大 ${MAX_SEARCH_PAGES} ページ (${MAX_SEARCH_PAGES * SEARCH_RESULT_LIMIT} 件) で打ち切られたか、`
+      + `API が numberMatched より少ない件数しか返していません。`
       + `目的のデータセットが結果に含まれていない場合はデータが欠落します。`
     );
   }
@@ -150,10 +160,6 @@ function buildSearchUrl(
   }
   return url;
 }
-
-// 1クエリで辿る最大ページ数。API 側の異常で numberMatched が過大に返り続けた場合の
-// 暴走防止。10ページ = 1000件で、実測の最大は153件 (長野県長野市, 2026-08-09)。
-export const MAX_SEARCH_PAGES = 10;
 
 // startindex を進めて全ページを取得し、features を結合する。
 //

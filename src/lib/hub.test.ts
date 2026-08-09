@@ -255,7 +255,7 @@ await describe('hub', async () => {
         assert.strictEqual(warnings.length, 1, '全件取れなかったので警告が1件出ること');
         // numberMatched (8) 自体は返っているので、「numberMatched が無い」ケースの警告ではなく
         // 「切り捨てられた」ケースの警告であることを本文で確認する。
-        assert.match(warnings[0], /切り捨てられました/);
+        assert.match(warnings[0], /全件取得できませんでした/);
         assert.match(warnings[0], /numberMatched: 8/);
         assert.match(warnings[0], /numberReturned: 2/);
       });
@@ -309,6 +309,35 @@ await describe('hub', async () => {
           '重複を除いた 9 件が出現順で並ぶこと'
         );
         assert.strictEqual(res.numberReturned, 9, 'numberReturned は重複排除後の件数');
+      });
+    });
+
+    await test('getHubItemsByQuery should stop at the maximum page count', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // numberMatched を過大に返し続ける API を再現する。
+        // 打ち切らないとリクエストが際限なく飛ぶ。
+        let requestCount = 0;
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市'), method: 'GET' })
+          .reply(200, () => {
+            requestCount += 1;
+            return makePage(100000, [makeFeature(`id-${requestCount}`, `ダミー${requestCount}`)]);
+          })
+          .times(hub.MAX_SEARCH_PAGES + 1);
+
+        const warnings: string[] = [];
+        const originalWarn = console.warn;
+        console.warn = (...args: unknown[]) => { warnings.push(args.join(' ')); };
+        try {
+          await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        } finally {
+          console.warn = originalWarn;
+        }
+
+        assert.strictEqual(requestCount, hub.MAX_SEARCH_PAGES, `リクエストが ${hub.MAX_SEARCH_PAGES} 回で止まること`);
+        assert.strictEqual(warnings.length, 1, '警告は1本だけ (打ち切りと切り捨てで二重に出さない)');
+        assert.match(warnings[0], /全件取得できませんでした/);
+        assert.match(warnings[0], new RegExp(`最大 ${hub.MAX_SEARCH_PAGES} ページ`));
       });
     });
 
