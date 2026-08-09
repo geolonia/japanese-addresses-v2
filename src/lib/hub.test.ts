@@ -482,6 +482,27 @@ await describe('hub', async () => {
       });
     });
 
+    await test('getHubItemsByQuery should reject a response without a features array', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // features を欠くレスポンス。検査しないと `as HubSearchResultList` をすり抜け、
+        // ページ追随の内部で URL 情報の無い裸の TypeError になる
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, { type: 'FeatureCollection', numberMatched: 1, numberReturned: 1 });
+
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          (err: Error) => {
+            assert.match(err.message, /features is not an array/);
+            // どのクエリで壊れたか分かるよう URL が含まれること
+            // (URL 中のクエリはパーセントエンコードされている)
+            assert.ok(err.message.includes(encodeURIComponent('香川県高松市')), err.message);
+            return true;
+          }
+        );
+      });
+    });
+
     await test('getHubItemsByQuery should handle fetch error when network is disconnected', async () => {
       await withMockAgent(async () => {
         await assert.rejects(
@@ -568,6 +589,24 @@ await describe('hub', async () => {
         await assert.rejects(
           hub.getHubItemById('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'),
           new Error('HUB API returned an error: {"message":"Cannot find item with recordId xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx in collection All","error":"Not Found","statusCode":404}')
+        );
+      });
+    });
+
+    await test('getHubItemById should reject a response without properties', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // properties を欠くレスポンス。検査しないと CSV 取得やタイトル照合の時点で
+        // URL 情報の無い TypeError になる
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: '/api/search/v1/collections/all/items/45bcb60e4dc747b58def5493ab829825', method: 'GET' })
+          .reply(200, { id: '45bcb60e4dc747b58def5493ab829825', type: 'Feature', geometry: null });
+
+        await assert.rejects(
+          hub.getHubItemById('45bcb60e4dc747b58def5493ab829825'),
+          new Error(
+            'HUB API returned an unexpected item response (properties is missing): '
+            + 'https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items/45bcb60e4dc747b58def5493ab829825'
+          )
         );
       });
     });

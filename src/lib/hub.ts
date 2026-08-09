@@ -170,6 +170,18 @@ async function fetchHubJson<T>(url: string): Promise<T> {
   return await res.json() as T;
 }
 
+// 検索レスポンスを取得し、以降のコードが前提にしている形だけ検査する。
+// `as T` は実行時に何も保証しないため、features を欠くレスポンスが返ると
+// 「features.length を undefined から読めない」といった URL 情報の無い裸の TypeError が
+// ページ追随の内部から飛び、どのクエリで壊れたのか分からなくなる。
+async function fetchSearchPage(url: string): Promise<HubSearchResultList> {
+  const json = await fetchHubJson<HubSearchResultList>(url);
+  if (!Array.isArray(json.features)) {
+    throw new Error(`HUB API returned an unexpected search response (features is not an array): ${url}`);
+  }
+  return json;
+}
+
 // 検索の URL を組み立てる。ページ追随でも同じ関数を使い、URL の作り方を1箇所に集約する。
 // レスポンスの rel=next の href は未エンコード (生の日本語・生スペース) で返るため、
 // それを再パースするより自前で組み立てるほうが安全。
@@ -202,7 +214,7 @@ function buildSearchUrl(search: HubSearchQuery, startIndex?: number): string {
 // 将来消えるとページングが1ページ目で静かに止まる。numberMatched は required なので
 // こちらで進捗を測る。
 async function fetchAllSearchPages(search: HubSearchQuery): Promise<HubSearchResultList> {
-  const firstPage = await fetchHubJson<HubSearchResultList>(buildSearchUrl(search));
+  const firstPage = await fetchSearchPage(buildSearchUrl(search));
   const numberMatched = firstPage.numberMatched;
 
   // サーバ側の進捗 (fetchedCount) と結果 (mergedFeatures) は別々に数える。
@@ -238,9 +250,7 @@ async function fetchAllSearchPages(search: HubSearchQuery): Promise<HubSearchRes
   ) {
     // startindex は 1 始まり。前回の startindex + limit ではなく実際の取得件数を基準に
     // することで、API が limit より少なく返しても範囲を飛ばさない。
-    const nextPage = await fetchHubJson<HubSearchResultList>(
-      buildSearchUrl(search, fetchedCount + 1)
-    );
+    const nextPage = await fetchSearchPage(buildSearchUrl(search, fetchedCount + 1));
     lastPageCount = nextPage.features.length;
     fetchedCount += lastPageCount;
     appendFeatures(nextPage.features);
@@ -309,6 +319,12 @@ export async function getHubItemById(id: string): Promise<HubSearchResult> {
   } else {
     const url = `${HUB_BASE_REGISTRY_URL}/collections/all/items/${id}`;
     json = await fetchHubJson<HubSearchResult>(url);
+    // 呼び出し側は properties.url / properties.title を前提にしている。
+    // 検査しないと、CSV 取得やタイトル照合の時点で URL 情報の無い TypeError になる。
+    const properties: unknown = json.properties;
+    if (typeof properties !== 'object' || properties === null) {
+      throw new Error(`HUB API returned an unexpected item response (properties is missing): ${url}`);
+    }
 
     await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
     await fs.promises.writeFile(cacheFile, JSON.stringify(json));
