@@ -30,12 +30,22 @@ function getCacheDir(): string {
   return process.env.CACHE_DIR || DEFAULT_CACHE_DIR;
 }
 
+/** レスポンスの links 要素。API 定義 (OgcItemResponseDto) には記載がなく、
+ * 実レスポンスにのみ存在する。ページ継続の判定には使わない (numberMatched を使う)。 */
+export type HubLink = {
+  rel: string,
+  type?: string,
+  title?: string,
+  href: string,
+}
+
 export type HubSearchResultList = GeoJSON.FeatureCollection & {
   timestamp: Date,
   /** limit が HUB_MAX_LIMIT を超えるとレスポンスから省かれる (実測) */
   numberMatched?: number,
   numberReturned: number,
   features: HubSearchResult[],
+  links?: HubLink[],
 }
 
 export type HubSearchResult = GeoJSON.Feature & {
@@ -91,6 +101,56 @@ function warnIfTruncated(json: HubSearchResultList, query: string): void {
   }
 }
 
+// HUB API を取得して JSON を返す。エラー時のメッセージ組み立ては
+// 検索・単体取得の両方で同じなので、ここに集約する。
+async function fetchHubJson<T>(url: string): Promise<T> {
+  const res = await fetchWithRetry(url, {
+    headers: {
+      'User-Agent': USER_AGENT,
+    },
+  });
+  if (!res.ok) {
+    console.log(url);
+    if (res.headers.get('content-type')?.includes('application/geo+json')) {
+      const errorJson = await res.json() as HubSearchError;
+      throw new Error(`HUB API returned an error: ${JSON.stringify(errorJson)}`);
+    } else {
+      throw new Error(`HUB API returned an error: ${res.status} ${res.statusText}`);
+    }
+  }
+  return await res.json() as T;
+}
+
+// 検索の URL を組み立てる。ページ追随でも同じ関数を使い、URL の作り方を1箇所に集約する。
+// レスポンスの rel=next の href は未エンコード (生の日本語・生スペース) で返るため、
+// それを再パースするより自前で組み立てるほうが安全。
+function buildSearchUrl(
+  query: string,
+  categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
+  categoryPref?: PrefectureName,
+  sortBy?: 'title' | 'created' | 'modified',
+  startIndex?: number,
+): string {
+  let categoryPart = '';
+  if (categoryLevel && categoryPref) {
+    categoryPart = ` AND ((categories IN (/categories/${categoryLevel}/${categoryPref})))`;
+  } else if (categoryLevel) {
+    categoryPart = ` AND ((categories IN (/categories/${categoryLevel})))`;
+  }
+  let url = `${HUB_BASE_REGISTRY_URL}/collections/all/items?`
+    + `filter=((group IN (${HUB_GROUP_ID})))${encodeURIComponent(categoryPart)}`
+    + `&limit=${SEARCH_RESULT_LIMIT}`
+    + `&q=${encodeURIComponent(query)}`;
+  if (sortBy) {
+    url += `&sortBy=-properties.${sortBy}`;
+  }
+  // startindex は 1 始まり (API 定義: minimum 1)
+  if (typeof startIndex === 'number') {
+    url += `&startindex=${startIndex}`;
+  }
+  return url;
+}
+
 export async function getHubItemsByQuery(
   query: string,
   categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
@@ -107,34 +167,9 @@ export async function getHubItemsByQuery(
     json = await fs.promises.readFile(cacheFile, 'utf-8')
       .then((data) => JSON.parse(data) as HubSearchResultList);
   } else {
-    let categoryPart = '';
-    if (categoryLevel && categoryPref) {
-      categoryPart = ` AND ((categories IN (/categories/${categoryLevel}/${categoryPref})))`;
-    } else if (categoryLevel) {
-      categoryPart = ` AND ((categories IN (/categories/${categoryLevel})))`;
-    }
-    let url = `${HUB_BASE_REGISTRY_URL}/collections/all/items?`
-      + `filter=((group IN (${HUB_GROUP_ID})))${encodeURIComponent(categoryPart)}`
-      + `&limit=${SEARCH_RESULT_LIMIT}`
-      + `&q=${encodeURIComponent(query)}`;
-    if (sortBy) {
-      url += `&sortBy=-properties.${sortBy}`;
-    }
-    const res = await fetchWithRetry(url, {
-      headers: {
-        'User-Agent': USER_AGENT,
-      },
-    });
-    if (!res.ok) {
-      console.log(url);
-      if (res.headers.get('content-type')?.includes('application/geo+json')) {
-        const errorJson = await res.json() as HubSearchError;
-        throw new Error(`HUB API returned an error: ${JSON.stringify(errorJson)}`);
-      } else {
-        throw new Error(`HUB API returned an error: ${res.status} ${res.statusText}`);
-      }
-    }
-    json = await res.json() as HubSearchResultList;
+    json = await fetchHubJson<HubSearchResultList>(
+      buildSearchUrl(query, categoryLevel, categoryPref, sortBy)
+    );
 
     await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
     await fs.promises.writeFile(cacheFile, JSON.stringify(json));
@@ -156,21 +191,7 @@ export async function getHubItemById(id: string): Promise<HubSearchResult> {
       .then((data) => JSON.parse(data) as HubSearchResult);
   } else {
     const url = `${HUB_BASE_REGISTRY_URL}/collections/all/items/${id}`;
-    const res = await fetchWithRetry(url, {
-      headers: {
-        'User-Agent': USER_AGENT,
-      },
-    });
-    if (!res.ok) {
-      console.log(url);
-      if (res.headers.get('content-type')?.includes('application/geo+json')) {
-        const errorJson = await res.json() as HubSearchError;
-        throw new Error(`HUB API returned an error: ${JSON.stringify(errorJson)}`);
-      } else {
-        throw new Error(`HUB API returned an error: ${res.status} ${res.statusText}`);
-      }
-    }
-    json = await res.json() as HubSearchResult;
+    json = await fetchHubJson<HubSearchResult>(url);
 
     await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
     await fs.promises.writeFile(cacheFile, JSON.stringify(json));
