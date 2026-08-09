@@ -59,15 +59,21 @@ function makeFeature(id: string, title: string) {
 
 // 1ページ分のレスポンスを作る。numberMatched は全体の一致件数、
 // numberReturned はこのページの件数。
-function makePage(numberMatched: number | undefined, features: ReturnType<typeof makeFeature>[]) {
+// nextStartIndex を渡すと、実APIが後続ページのあるレスポンスに付ける rel=next リンクを模した
+// リンクを追加する (次のページが無い場合は省略する = 実APIの挙動)。
+function makePage(numberMatched: number | undefined, features: ReturnType<typeof makeFeature>[], nextStartIndex?: number) {
+  const links: Record<string, string>[] = [
+    { rel: 'self', type: 'application/geo+json', title: 'This document as GeoJSON', href: 'https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items' },
+  ];
+  if (typeof nextStartIndex === 'number') {
+    links.push({ rel: 'next', type: 'application/geo+json', title: 'items (next)', href: `https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items?startindex=${nextStartIndex}` });
+  }
   const page: Record<string, unknown> = {
     type: 'FeatureCollection',
     timestamp: '2026-08-09T00:00:00.000Z',
     numberReturned: features.length,
     features,
-    links: [
-      { rel: 'self', type: 'application/geo+json', title: 'This document as GeoJSON', href: 'https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items' },
-    ],
+    links,
   };
   if (typeof numberMatched === 'number') {
     page.numberMatched = numberMatched;
@@ -147,6 +153,7 @@ await describe('hub', async () => {
       await withMockAgent(async (mockAgent) => {
         // numberMatched 6 に対し 1ページ目は 4 件しか返らない。
         // 残り 2 件は startindex=5 の 2ページ目にあり、そこに目的のデータセットが入っている。
+        // 1ページ目には実APIと同様に rel=next リンクを付け、2ページ目 (最終ページ) には付けない。
         mockAgent.get(HUB_ORIGIN)
           .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
           .reply(200, makePage(6, [
@@ -154,7 +161,7 @@ await describe('hub', async () => {
             makeFeature('id-2', '香川県 高松市 町字マスター'),
             makeFeature('id-3', 'ダミー3'),
             makeFeature('id-4', 'ダミー4'),
-          ]));
+          ], 5));
         mockAgent.get(HUB_ORIGIN)
           .intercept({ path: pathWithStartIndex(5, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
           .reply(200, makePage(6, [
@@ -171,6 +178,14 @@ await describe('hub', async () => {
         assert.ok(
           hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'),
           '2ページ目にしか無いデータセットが見つかること'
+        );
+        assert.ok(
+          !res.links?.some((link) => link.rel === 'next'),
+          '結合済みの結果には「まだ続きがある」rel=next を残さないこと'
+        );
+        assert.ok(
+          res.links?.some((link) => link.rel === 'self'),
+          'rel=next 以外のリンク (self) は残ること'
         );
       });
     });
@@ -238,6 +253,11 @@ await describe('hub', async () => {
           console.warn = originalWarn;
         }
         assert.strictEqual(warnings.length, 1, '全件取れなかったので警告が1件出ること');
+        // numberMatched (8) 自体は返っているので、「numberMatched が無い」ケースの警告ではなく
+        // 「切り捨てられた」ケースの警告であることを本文で確認する。
+        assert.match(warnings[0], /切り捨てられました/);
+        assert.match(warnings[0], /numberMatched: 8/);
+        assert.match(warnings[0], /numberReturned: 2/);
       });
     });
 
