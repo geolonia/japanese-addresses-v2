@@ -172,7 +172,21 @@ async function fetchAllSearchPages(
   );
   const numberMatched = firstPage.numberMatched;
 
-  const mergedFeatures: HubSearchResult[] = [...firstPage.features];
+  // サーバ側の進捗 (fetchedCount) と結果 (mergedFeatures) は別々に数える。
+  // sortBy の順序安定性は API 定義に保証がなく、ページをまたぐ間にカタログが更新されると
+  // 同じ feature が2ページに現れうる。ここで重複排除後の件数を startindex に使うと、
+  // 1件排除するたびにサーバ側のオフセットが1つ後ろへずれて取得漏れが出る。
+  const seenIds = new Set<string>();
+  const mergedFeatures: HubSearchResult[] = [];
+  const appendFeatures = (features: HubSearchResult[]) => {
+    for (const feature of features) {
+      if (seenIds.has(feature.properties.id)) { continue; }
+      seenIds.add(feature.properties.id);
+      mergedFeatures.push(feature);
+    }
+  };
+  appendFeatures(firstPage.features);
+
   let fetchedCount = firstPage.features.length;
   let lastPageCount = firstPage.features.length;
   let pages = 1;
@@ -191,7 +205,7 @@ async function fetchAllSearchPages(
     );
     lastPageCount = nextPage.features.length;
     fetchedCount += lastPageCount;
-    mergedFeatures.push(...nextPage.features);
+    appendFeatures(nextPage.features);
     pages += 1;
   }
 

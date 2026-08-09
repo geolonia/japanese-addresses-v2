@@ -261,6 +261,57 @@ await describe('hub', async () => {
       });
     });
 
+    await test('getHubItemsByQuery should dedupe overlapping pages without skewing startindex', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // 1ページ目: id-1..id-4 (4件)
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(10, [
+            makeFeature('id-1', 'ダミー1'),
+            makeFeature('id-2', 'ダミー2'),
+            makeFeature('id-3', 'ダミー3'),
+            makeFeature('id-4', 'ダミー4'),
+          ]));
+        // 2ページ目 (startindex=5): id-4 が重複している (3件)
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(5, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(10, [
+            makeFeature('id-4', 'ダミー4'),
+            makeFeature('id-5', 'ダミー5'),
+            makeFeature('id-6', 'ダミー6'),
+          ]));
+        // 3ページ目は startindex=8 (= 生の取得件数 4+3 に 1 を足した値) で来ること。
+        // 重複排除後の件数 6 を使ってしまうと startindex=7 になり、この intercept に
+        // マッチせずテストが落ちる。
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(8, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(10, [
+            makeFeature('id-8', 'ダミー8'),
+            makeFeature('id-9', 'ダミー9'),
+            makeFeature('id-10', 'ダミー10'),
+          ]));
+
+        const warnings: string[] = [];
+        const originalWarn = console.warn;
+        console.warn = (...args: unknown[]) => { warnings.push(args.join(' ')); };
+        let res;
+        try {
+          res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        } finally {
+          console.warn = originalWarn;
+        }
+
+        const ids = res.features.map((f: hub.HubSearchResult) => f.properties.id);
+        assert.strictEqual(ids.length, new Set(ids).size, '重複が排除されていること');
+        assert.deepStrictEqual(
+          ids,
+          ['id-1', 'id-2', 'id-3', 'id-4', 'id-5', 'id-6', 'id-8', 'id-9', 'id-10'],
+          '重複を除いた 9 件が出現順で並ぶこと'
+        );
+        assert.strictEqual(res.numberReturned, 9, 'numberReturned は重複排除後の件数');
+      });
+    });
+
     await test('getHubItemsByQuery should handle hub handled error', async () => {
       await withMockAgent(async (mockAgent) => {
         mockAgent.get(HUB_ORIGIN)
