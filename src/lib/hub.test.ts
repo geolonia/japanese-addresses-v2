@@ -457,6 +457,16 @@ await describe('hub', async () => {
       assert.ok(res.numberMatched! >= res.numberReturned);
       assert.ok(hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'));
 
+      // numberMatched が limit を超えるクエリでページ追随が働くこと。
+      // 長野県長野市は「長野県」「長野市」がスペース区切りの語として扱われ、
+      // 県内の全市区町村がマッチして件数が膨らむ (2026-08-09 実測で 153 件 = 2ページ)。
+      // クエリ形式は 04_make_chiban.ts が組み立てるものと同じ (`${area} 地番マスター`)。
+      const paged = await hub.getHubItemsByQuery('長野県 長野市 地番マスター', '市区町村レベル', '長野県');
+      assert.ok(paged.numberMatched! > 100, `numberMatched が limit を超えること (実際: ${paged.numberMatched})`);
+      assert.strictEqual(paged.features.length, paged.numberMatched, '全ページが結合されること');
+      assert.strictEqual(hub.mayBeTruncated(paged), false);
+      assert.ok(hub.findResultByTypeAndArea(paged.features, '地番マスター', '長野県 長野市'));
+
       const none = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');
       assert.ok(none.numberMatched === 0);
     });

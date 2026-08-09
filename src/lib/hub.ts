@@ -12,16 +12,17 @@ import { PrefectureName } from './prefecture_name_codes.js';
 
 const HUB_BASE_REGISTRY_URL = `https://dataset.address-br.digital.go.jp/api/search/v1`;
 const HUB_GROUP_ID = '864dfb9be4ef483d864e886fa25e1c94';
-// HUB API が受け付ける limit の上限。これを超える値を指定するとレスポンスから
-// numberMatched が消え、切り捨ての検知ができなくなる (実測で確認)。
+// HUB API が受け付ける limit の上限。API 定義 (OpenAPI) で
+// limit は integer / minimum 0 / maximum 100 と規定されている。
+// これを超える値を指定するとレスポンスから numberMatched が消え、
+// 切り捨ての検知ができなくなる (実測で確認)。
+// 定義: https://dataset.address-br.digital.go.jp/api/search/definition/
 const HUB_MAX_LIMIT = 100;
 // 1クエリあたりの取得件数上限 (HUB_MAX_LIMIT 以下にすること)。
 //
 // 検索クエリはスペース区切りの語として扱われるため、都道府県名と同名の市
-// (長野県長野市など) では県内の全市区町村がマッチして件数が膨らむ。実測では
-// numberMatched が 2〜153件、目的のデータセットを含むのに必要な件数は最大22件
-// (岐阜県岐阜市の地番マスター位置参照拡張が22番目)だった。
-// 旧実装の limit=12 では、この位置参照拡張が枠外に落ちて座標なしで出力されていた。
+// (長野県長野市など) では県内の全市区町村がマッチして件数が膨らむ。
+// この上限を超える分は startindex のページ追随 (fetchAllSearchPages) で取得する。
 const SEARCH_RESULT_LIMIT = HUB_MAX_LIMIT;
 
 // 1クエリで辿る最大ページ数。API 側の異常で numberMatched が過大に返り続けた場合の
