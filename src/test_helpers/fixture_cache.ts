@@ -11,6 +11,9 @@ const FIXTURES_DIR = path.join(REPO_ROOT, 'test', 'fixtures', 'cache');
 const tmpCacheDirs: string[] = [];
 let cleanupRegistered = false;
 
+// SIGINT/SIGTERM の既定の終了コード (128 + シグナル番号)
+const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
+
 function registerCleanup() {
   if (cleanupRegistered) { return; }
   cleanupRegistered = true;
@@ -23,6 +26,12 @@ function registerCleanup() {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+  // exit イベントはシグナルによる終了では発火しないため、Ctrl-C で中断すると
+  // 一時ディレクトリが残る。シグナルを通常の終了に変換して上の後始末を通す。
+  // ハンドラを張ると既定の即時終了が無効になるので、同じ終了コードで抜ける。
+  for (const [signal, exitCode] of Object.entries(SIGNAL_EXIT_CODES)) {
+    process.on(signal, () => { process.exit(exitCode); });
+  }
 }
 
 // テスト用に空の一時 CACHE_DIR を割り当てる (process.env.CACHE_DIR)。
