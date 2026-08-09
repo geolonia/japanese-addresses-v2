@@ -75,6 +75,31 @@ export type HubSearchError = {
   statusCode: number,
 }
 
+export type HubCategoryLevel = '全国レベル' | '都道府県レベル' | '市区町村レベル';
+
+/**
+ * 検索を一意に決める条件。省略可能な位置引数が並ぶと呼び出し側で順序を取り違えるため、
+ * URL 組み立て・ページ追随・キャッシュキー生成の間はこのオブジェクトで受け渡す。
+ * ページ位置 (startindex) は同じ検索の中で動く値なので、ここには含めず別引数にする。
+ */
+type HubSearchQuery = {
+  query: string,
+  categoryLevel?: HubCategoryLevel,
+  categoryPref?: PrefectureName,
+  sortBy?: 'title' | 'created' | 'modified',
+}
+
+// キャッシュキーは検索条件と1対1で対応させる。
+// limit はレスポンスの内容 (切り捨ての有無) を左右するのでキャッシュキーに含める。
+// 含めないと、より小さい limit で保存された切り捨て済みのキャッシュを読み続けてしまう。
+//
+// 各項目は undefined でも文字列 "undefined" として残す。省略すると
+// ('東京都', undefined, '市区町村レベル') のような別々の条件が同じキーに潰れる。
+function buildCacheKey(search: HubSearchQuery): string {
+  return `hub_items_by_query_${search.query}_${search.categoryLevel}`
+    + `_${search.categoryPref}_${search.sortBy}_limit${SEARCH_RESULT_LIMIT}.json`;
+}
+
 /**
  * 全件取得できたと確定できない可能性があるか。
  * ページ追随の導入後は limit による切り捨てが直接の原因になることはなく、ページ数の上限
@@ -148,13 +173,8 @@ async function fetchHubJson<T>(url: string): Promise<T> {
 // 検索の URL を組み立てる。ページ追随でも同じ関数を使い、URL の作り方を1箇所に集約する。
 // レスポンスの rel=next の href は未エンコード (生の日本語・生スペース) で返るため、
 // それを再パースするより自前で組み立てるほうが安全。
-function buildSearchUrl(
-  query: string,
-  categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
-  categoryPref?: PrefectureName,
-  sortBy?: 'title' | 'created' | 'modified',
-  startIndex?: number,
-): string {
+function buildSearchUrl(search: HubSearchQuery, startIndex?: number): string {
+  const { query, categoryLevel, categoryPref, sortBy } = search;
   let categoryPart = '';
   if (categoryLevel && categoryPref) {
     categoryPart = ` AND ((categories IN (/categories/${categoryLevel}/${categoryPref})))`;
@@ -181,15 +201,8 @@ function buildSearchUrl(
 // (OgcItemResponseDto) に記載が無く、実レスポンスにあるだけの未文書フィールドで、
 // 将来消えるとページングが1ページ目で静かに止まる。numberMatched は required なので
 // こちらで進捗を測る。
-async function fetchAllSearchPages(
-  query: string,
-  categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
-  categoryPref?: PrefectureName,
-  sortBy?: 'title' | 'created' | 'modified',
-): Promise<HubSearchResultList> {
-  const firstPage = await fetchHubJson<HubSearchResultList>(
-    buildSearchUrl(query, categoryLevel, categoryPref, sortBy)
-  );
+async function fetchAllSearchPages(search: HubSearchQuery): Promise<HubSearchResultList> {
+  const firstPage = await fetchHubJson<HubSearchResultList>(buildSearchUrl(search));
   const numberMatched = firstPage.numberMatched;
 
   // サーバ側の進捗 (fetchedCount) と結果 (mergedFeatures) は別々に数える。
@@ -226,7 +239,7 @@ async function fetchAllSearchPages(
     // startindex は 1 始まり。前回の startindex + limit ではなく実際の取得件数を基準に
     // することで、API が limit より少なく返しても範囲を飛ばさない。
     const nextPage = await fetchHubJson<HubSearchResultList>(
-      buildSearchUrl(query, categoryLevel, categoryPref, sortBy, fetchedCount + 1)
+      buildSearchUrl(search, fetchedCount + 1)
     );
     lastPageCount = nextPage.features.length;
     fetchedCount += lastPageCount;
@@ -245,14 +258,13 @@ async function fetchAllSearchPages(
 
 export async function getHubItemsByQuery(
   query: string,
-  categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
+  categoryLevel?: HubCategoryLevel,
   categoryPref?: PrefectureName,
   sortBy?: 'title' | 'created' | 'modified'
 ): Promise<HubSearchResultList> {
-  // limit はレスポンスの内容 (切り捨ての有無) を左右するのでキャッシュキーに含める。
-  // 含めないと、より小さい limit で保存された切り捨て済みのキャッシュを読み続けてしまう。
-  const cacheKey = `hub_items_by_query_${query}_${categoryLevel}_${categoryPref}_${sortBy}_limit${SEARCH_RESULT_LIMIT}.json`;
-  const cacheFile = path.join(getCacheDir(), 'hub', cacheKey);
+  // 公開シグネチャは 01〜04 の呼び出し側に合わせて据え置き、ここから先はオブジェクトで扱う
+  const search: HubSearchQuery = { query, categoryLevel, categoryPref, sortBy };
+  const cacheFile = path.join(getCacheDir(), 'hub', buildCacheKey(search));
 
   let json: HubSearchResultList | undefined = undefined;
   if (fs.existsSync(cacheFile)) {
@@ -274,7 +286,7 @@ export async function getHubItemsByQuery(
     }
   }
   if (!json) {
-    json = await fetchAllSearchPages(query, categoryLevel, categoryPref, sortBy);
+    json = await fetchAllSearchPages(search);
 
     await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
     await fs.promises.writeFile(cacheFile, JSON.stringify(json));
