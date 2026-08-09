@@ -13,6 +13,8 @@ await test('fetchWithRetry should fetch successfully', async () => {
     const res = await fetchWithRetry('https://example.com/');
     assert.ok(res instanceof Response);
     assert.strictEqual(res.status, 200);
+    // status だけでは別のインターセプタがマッチしても通ってしまうため、本文まで確認する
+    assert.strictEqual(await res.text(), 'OK');
   });
 });
 
@@ -45,6 +47,7 @@ await test('fetchWithRetry should not retry on a non-retryable HTTP status', asy
 
     const res = await fetchWithRetry('https://example.com/not-found');
     assert.strictEqual(res.status, 404);
+    assert.strictEqual(await res.text(), 'Not Found');
     assert.strictEqual(attempts, 1, 'Should not retry on 404');
   });
 });
@@ -63,6 +66,7 @@ await test('fetchWithRetry should retry on a retryable HTTP status', async () =>
     // 最終試行でも解消しなかった場合は、そのレスポンスを呼び出し元に返す
     const res = await fetchWithRetry('https://example.com/unavailable', undefined, 2);
     assert.strictEqual(res.status, 503);
+    assert.strictEqual(await res.text(), 'Service Unavailable');
     assert.strictEqual(attempts, 2, 'Should retry on 503');
   });
 });
@@ -93,6 +97,7 @@ await test('fetchWithRetry should not retry on 403', async () => {
     // ABRデータ配信CDNの国外アクセス制限は恒久的な拒否なので、再試行しても無駄になる
     const res = await fetchWithRetry('https://example.com/forbidden');
     assert.strictEqual(res.status, 403);
+    assert.strictEqual(await res.text(), 'Forbidden');
     assert.strictEqual(attempts, 1, 'Should not retry on 403');
   });
 });
