@@ -113,6 +113,7 @@ function warnIfTruncated(json: HubSearchResultList, query: string): void {
       `HUB API の検索結果を全件取得できませんでした `
       + `(query: ${query}, numberMatched: ${json.numberMatched}, numberReturned: ${json.numberReturned})。`
       + `最大 ${MAX_SEARCH_PAGES} ページ (${MAX_SEARCH_PAGES * SEARCH_RESULT_LIMIT} 件) で打ち切られたか、`
+      + `ページ間の重複を排除して件数が減ったか、`
       + `API が numberMatched より少ない件数しか返していません。`
       + `目的のデータセットが結果に含まれていない場合はデータが欠落します。`
     );
@@ -128,7 +129,7 @@ async function fetchHubJson<T>(url: string): Promise<T> {
     },
   });
   if (!res.ok) {
-    console.log(url);
+    console.error(url);
     if (res.headers.get('content-type')?.includes('application/geo+json')) {
       const errorJson = await res.json() as HubSearchError;
       throw new Error(`HUB API returned an error: ${JSON.stringify(errorJson)}`);
@@ -190,6 +191,11 @@ async function fetchAllSearchPages(
   // sortBy の順序安定性は API 定義に保証がなく、ページをまたぐ間にカタログが更新されると
   // 同じ feature が2ページに現れうる。ここで重複排除後の件数を startindex に使うと、
   // 1件排除するたびにサーバ側のオフセットが1つ後ろへずれて取得漏れが出る。
+  //
+  // 順序が入れ替わると、逆にページ間で feature が飛ばされることもある。ページングが要る
+  // クエリを投げる 04_make_chiban は sortBy を渡しておらず、API の既定順序に依存している。
+  // これは意図した割り切りで、飛ばされた分は mergedFeatures.length が numberMatched に
+  // 届かなくなるため warnIfTruncated が検知する (静かなデータ欠落にはならない)。
   const seenIds = new Set<string>();
   const mergedFeatures: HubSearchResult[] = [];
   const appendFeatures = (features: HubSearchResult[]) => {
