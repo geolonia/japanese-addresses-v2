@@ -275,6 +275,21 @@ async function fetchAllSearchPages(search: HubSearchQuery): Promise<HubSearchRes
     pages += 1;
   }
 
+  // 警告だけでは「ページ上限で止まった」のか「API が numberMatched より少なく返した」のか
+  // 区別できないため、ページ追随が実際に走ったときだけ内訳を残す。
+  // 警告を出す場所は warnIfTruncated の1箇所に保ちたいので、ここは console.log にとどめる。
+  // 1ページで済むクエリ (大半) では出力しない — 04 は市区町村ごとに検索するため、
+  // 毎回出すと 1900 行超のノイズになる。
+  if (pages > 1) {
+    console.log(
+      `HUB API: ${pages} ページ取得 (query: ${search.query}, `
+      + `取得 ${fetchedCount} 件 / numberMatched ${numberMatched ?? '不明'}`
+      + (pages >= MAX_SEARCH_PAGES ? `, ページ上限 ${MAX_SEARCH_PAGES} に到達` : '')
+      + (lastPageCount === 0 ? ', 最終ページが0件' : '')
+      + `)`
+    );
+  }
+
   return {
     ...firstPage,
     features: mergedFeatures,

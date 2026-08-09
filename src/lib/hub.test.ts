@@ -226,8 +226,13 @@ await describe('hub', async () => {
             makeFeature('id-2', 'ダミー2'),
           ]));
 
-        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        const { result: res, logs } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
         assert.strictEqual(res.features.length, 2);
+        // 1ページで済むクエリが大半なので、ここでログを出すと 04 の実行が
+        // 1900 行超のノイズで埋まる
+        assert.deepStrictEqual(logs, [], 'ページ追随が不要なら何も出力しないこと');
       });
     });
 
@@ -262,12 +267,18 @@ await describe('hub', async () => {
           .intercept({ path: pathWithStartIndex(3, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
           .reply(200, makePage(8, []));
 
-        const { result: res, warnings } = await withCapturedConsole(
+        const { result: res, warnings, logs } = await withCapturedConsole(
           () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
         );
         assert.strictEqual(res.features.length, 2);
         assert.strictEqual(res.numberReturned, 2);
         assert.strictEqual(warnings.length, 1, '全件取れなかったので警告が1件出ること');
+        // ページ上限ではなく「API が numberMatched より少なく返した」側の打ち切りだと
+        // 分かること。警告文だけでは両者を区別できない
+        assert.strictEqual(logs.length, 1);
+        assert.match(logs[0], /2 ページ取得/);
+        assert.match(logs[0], /最終ページが0件/);
+        assert.doesNotMatch(logs[0], /ページ上限/);
         // numberMatched (8) 自体は返っているので、「numberMatched が無い」ケースの警告ではなく
         // 「切り捨てられた」ケースの警告であることを本文で確認する。
         assert.match(warnings[0], /全件取得できませんでした/);
@@ -377,7 +388,7 @@ await describe('hub', async () => {
           })
           .times(hub.MAX_SEARCH_PAGES + 1);
 
-        const { warnings } = await withCapturedConsole(
+        const { warnings, logs } = await withCapturedConsole(
           () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
         );
 
@@ -385,6 +396,12 @@ await describe('hub', async () => {
         assert.strictEqual(warnings.length, 1, '警告は1本だけ (打ち切りと切り捨てで二重に出さない)');
         assert.match(warnings[0], /全件取得できませんでした/);
         assert.match(warnings[0], new RegExp(`最大 ${hub.MAX_SEARCH_PAGES} ページ`));
+
+        // 警告の原因が「ページ上限で止まった」ことだと分かるログが別途出ること。
+        // 警告を増やさずに切り分けたいので console.log 側で出す。
+        assert.strictEqual(logs.length, 1);
+        assert.match(logs[0], new RegExp(`${hub.MAX_SEARCH_PAGES} ページ取得`));
+        assert.match(logs[0], new RegExp(`ページ上限 ${hub.MAX_SEARCH_PAGES} に到達`));
       });
     });
 
