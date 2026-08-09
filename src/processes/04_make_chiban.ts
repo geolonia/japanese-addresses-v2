@@ -144,21 +144,29 @@ async function main(argv: string[]) {
       const results = await getHubItemsByQuery(searchQuery, '市区町村レベル', ma.pref);
       const chibanDataRef = findResultByTypeAndArea(results.features, '地番マスター', area);
       const chibanPosDataRef = findResultByTypeAndArea(results.features, '地番マスター位置参照拡張', area);
+      // 検索結果が切り捨てられている場合、データセットは存在するのに枠外へ落ちている
+      // 可能性がある。「見つからない」というログだけでは「元々存在しない」と読めてしまい
+      // データ欠落に気づけないため、地番マスター・位置参照拡張のどちらが欠けた場合も明示する。
+      const truncationNote = mayBeTruncated(results)
+        ? `検索結果が切り捨てられている可能性があります `
+          + `(numberMatched: ${results.numberMatched ?? '不明'}, numberReturned: ${results.numberReturned})。`
+          + `データセットが存在するのに取得できていない可能性があります。`
+        : undefined;
+
       if (!chibanDataRef) {
-        console.error(`Insufficient data found for ${searchQuery} (地番マスター)`);
+        // 地番マスター自体が無いとこの市区町村は丸ごと出力されない
+        console.error(
+          `Insufficient data found for ${searchQuery} (地番マスター)`
+          + (truncationNote ? `。${truncationNote}` : '')
+        );
         progress.increment();
         continue;
       }
 
       if (!chibanPosDataRef) {
-        if (mayBeTruncated(results)) {
-          // 検索結果が切り捨てられている場合、データセットは存在するのに枠外へ
-          // 落ちている可能性がある。座標なしで出力してしまうと気づけないため明示する。
+        if (truncationNote) {
           console.error(
-            `「${area} 地番マスター位置参照拡張」が検索結果に見つかりませんでしたが、`
-            + `検索結果が切り捨てられている可能性があります `
-            + `(numberMatched: ${results.numberMatched ?? '不明'}, numberReturned: ${results.numberReturned})。`
-            + `データセットが存在するのに取得できていない可能性があります。`
+            `「${area} 地番マスター位置参照拡張」が検索結果に見つかりませんでしたが、${truncationNote}`
           );
         } else {
           // 位置参照拡張が配信されていない市区町村もあるため、座標なしで続行する
