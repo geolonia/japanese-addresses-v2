@@ -2,12 +2,12 @@ import path from 'node:path';
 import fs from 'node:fs';
 import assert from 'node:assert';
 import test, { before } from 'node:test';
-import { MockAgent, setGlobalDispatcher, Agent } from 'undici';
 
 import {
   downloadAndExtractNlftpMlitFile,
 } from './mlit_nlftp.js';
 import { createTempCacheDir } from '../test_helpers/fixture_cache.js';
+import { withMockAgent } from '../test_helpers/mock_agent.js';
 
 const FIXTURES_DIR = path.join(import.meta.dirname, '..', '..', 'test', 'fixtures', 'lib', 'mlit_nlftp');
 const NLFTP_ORIGIN = 'https://nlftp.mlit.go.jp';
@@ -26,16 +26,13 @@ await test.describe('downloadAndExtractNlftpMlitFile', async () => {
   await test('it works', async () => {
     const fixtureZip = fs.readFileSync(path.join(FIXTURES_DIR, '47000-17.0b.zip'));
 
-    const mockAgent = new MockAgent();
-    mockAgent.disableNetConnect();
-    setGlobalDispatcher(mockAgent);
-    mockAgent.get(NLFTP_ORIGIN)
-      .intercept({ path: '/isj/dls/data/17.0b/47000-17.0b.zip', method: 'GET' })
-      .reply(200, fixtureZip, {
-        headers: { 'content-type': 'application/zip' },
-      });
+    await withMockAgent(async (mockAgent) => {
+      mockAgent.get(NLFTP_ORIGIN)
+        .intercept({ path: '/isj/dls/data/17.0b/47000-17.0b.zip', method: 'GET' })
+        .reply(200, fixtureZip, {
+          headers: { 'content-type': 'application/zip' },
+        });
 
-    try {
       // 沖縄県
       const data = await downloadAndExtractNlftpMlitFile('47');
       assert.strictEqual(data.length, 1228);
@@ -45,9 +42,6 @@ await test.describe('downloadAndExtractNlftpMlitFile', async () => {
       assert.strictEqual(data[0].oaza_cho, '古波蔵');
       assert.strictEqual(data[0].chome, '一丁目');
       assert.strictEqual(data[0].point.length, 2);
-    } finally {
-      await mockAgent.close();
-      setGlobalDispatcher(new Agent());
-    }
+    });
   });
 });

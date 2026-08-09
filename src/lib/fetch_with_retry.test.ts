@@ -1,21 +1,8 @@
 import assert from 'node:assert';
 import test from 'node:test';
-import { Response, MockAgent, setGlobalDispatcher, Agent } from 'undici';
+import { Response } from 'undici';
 import { fetchWithRetry } from './fetch_with_retry.js';
-
-// 第三者サービス(httpbin.org等)やDNS解決に依存すると、そのサービスの障害で
-// CIが落ちる。undiciのMockAgentで応答を差し替え、オフラインで実行できるようにする。
-async function withMockAgent(fn: (mockAgent: MockAgent) => Promise<void>): Promise<void> {
-  const mockAgent = new MockAgent();
-  mockAgent.disableNetConnect();
-  setGlobalDispatcher(mockAgent);
-  try {
-    await fn(mockAgent);
-  } finally {
-    await mockAgent.close();
-    setGlobalDispatcher(new Agent());
-  }
-}
+import { withMockAgent } from '../test_helpers/mock_agent.js';
 
 await test('fetchWithRetry should fetch successfully', async () => {
   await withMockAgent(async (mockAgent) => {

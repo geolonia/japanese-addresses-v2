@@ -2,10 +2,10 @@ import path from 'node:path';
 import fs from 'node:fs';
 import assert from 'node:assert';
 import { describe, test, beforeEach } from 'node:test';
-import { MockAgent, setGlobalDispatcher, Agent } from 'undici';
 
 import * as hub from './hub.js';
 import { createTempCacheDir } from '../test_helpers/fixture_cache.js';
+import { withMockAgent } from '../test_helpers/mock_agent.js';
 
 const FIXTURES_DIR = path.join(import.meta.dirname, '..', '..', 'test', 'fixtures', 'lib', 'hub');
 const HUB_ORIGIN = 'https://dataset.address-br.digital.go.jp';
@@ -19,18 +19,6 @@ const skipNetworkTests = process.env.RUN_NETWORK_TESTS
 
 function readJsonFixture(name: string): object {
   return JSON.parse(fs.readFileSync(path.join(FIXTURES_DIR, name), 'utf-8')) as object;
-}
-
-async function withMockAgent(fn: (mockAgent: MockAgent) => Promise<void>): Promise<void> {
-  const mockAgent = new MockAgent();
-  mockAgent.disableNetConnect();
-  setGlobalDispatcher(mockAgent);
-  try {
-    await fn(mockAgent);
-  } finally {
-    await mockAgent.close();
-    setGlobalDispatcher(new Agent());
-  }
 }
 
 // 指定した文字列がすべて含まれるリクエストパスにマッチする。
