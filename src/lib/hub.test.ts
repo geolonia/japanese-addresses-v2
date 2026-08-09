@@ -341,6 +341,70 @@ await describe('hub', async () => {
       });
     });
 
+    await test('getHubItemsByQuery should reuse a complete cache without fetching', async () => {
+      await withMockAgent(async () => {
+        // 完全な (切り捨てのない) キャッシュを置く。intercept は登録しない。
+        // withMockAgent は disableNetConnect() 済みなので、フェッチが起きれば必ず失敗する。
+        const cacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined_limit100.json'
+        );
+        fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+        fs.writeFileSync(cacheFile, JSON.stringify({
+          type: 'FeatureCollection',
+          numberMatched: 2,
+          numberReturned: 2,
+          features: [
+            { id: 'id-1', type: 'Feature', geometry: null, properties: { id: 'id-1', title: 'ダミー1' } },
+            { id: 'id-2', type: 'Feature', geometry: null, properties: { id: 'id-2', title: 'ダミー2' } },
+          ],
+        }));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        assert.strictEqual(res.features.length, 2);
+        assert.strictEqual(res.numberMatched, 2);
+      });
+    });
+
+    await test('getHubItemsByQuery should refetch a truncated cache', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // ページ追随の導入前に保存された切り捨て済みキャッシュを再現する。
+        // キーが同じなのでヒットするが、そのまま使うと欠落したまま返してしまう。
+        const cacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined_limit100.json'
+        );
+        fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+        fs.writeFileSync(cacheFile, JSON.stringify({
+          type: 'FeatureCollection',
+          numberMatched: 3,
+          numberReturned: 1,
+          features: [
+            { id: 'id-1', type: 'Feature', geometry: null, properties: { id: 'id-1', title: 'ダミー1' } },
+          ],
+        }));
+
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(3, [
+            makeFeature('id-1', 'ダミー1'),
+            makeFeature('id-2', 'ダミー2'),
+            makeFeature('id-3', 'ダミー3'),
+          ]));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        assert.strictEqual(res.features.length, 3, '再取得した完全な結果が返ること');
+        assert.strictEqual(hub.mayBeTruncated(res), false);
+
+        // キャッシュファイルも完全な結果で上書きされていること
+        const saved = JSON.parse(fs.readFileSync(cacheFile, 'utf-8')) as hub.HubSearchResultList;
+        assert.strictEqual(saved.features.length, 3);
+        assert.strictEqual(saved.numberReturned, 3);
+      });
+    });
+
     await test('getHubItemsByQuery should handle hub handled error', async () => {
       await withMockAgent(async (mockAgent) => {
         mockAgent.get(HUB_ORIGIN)

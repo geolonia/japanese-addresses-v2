@@ -235,18 +235,25 @@ export async function getHubItemsByQuery(
   const cacheKey = `hub_items_by_query_${query}_${categoryLevel}_${categoryPref}_${sortBy}_limit${SEARCH_RESULT_LIMIT}.json`;
   const cacheFile = path.join(getCacheDir(), 'hub', cacheKey);
 
-  let json: HubSearchResultList;
+  let json: HubSearchResultList | undefined = undefined;
   if (fs.existsSync(cacheFile)) {
-    json = await fs.promises.readFile(cacheFile, 'utf-8')
+    const cached = await fs.promises.readFile(cacheFile, 'utf-8')
       .then((data) => JSON.parse(data) as HubSearchResultList);
-  } else {
+    // ページ追随の導入前に保存されたキャッシュは切り捨てられたままの可能性がある。
+    // キャッシュキーは同じなのでヒットし続け、そのまま使うと新しい取得ロジックが
+    // 一度も走らずデータ欠落が残る。
+    if (!mayBeTruncated(cached)) {
+      json = cached;
+    }
+  }
+  if (!json) {
     json = await fetchAllSearchPages(query, categoryLevel, categoryPref, sortBy);
 
     await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
     await fs.promises.writeFile(cacheFile, JSON.stringify(json));
   }
 
-  // キャッシュ済みのレスポンスでも切り捨ては起きているので、キャッシュ判定の外で検査する
+  // 再取得しても全件揃わないことがあるので、キャッシュ判定の外で検査する
   warnIfTruncated(json, query);
 
   return json;
