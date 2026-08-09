@@ -151,6 +151,59 @@ function buildSearchUrl(
   return url;
 }
 
+// 1クエリで辿る最大ページ数。API 側の異常で numberMatched が過大に返り続けた場合の
+// 暴走防止。10ページ = 1000件で、実測の最大は153件 (長野県長野市, 2026-08-09)。
+export const MAX_SEARCH_PAGES = 10;
+
+// startindex を進めて全ページを取得し、features を結合する。
+//
+// 継続判定にはレスポンスの links (rel=next) を使わない。links は API 定義
+// (OgcItemResponseDto) に記載が無く、実レスポンスにあるだけの未文書フィールドで、
+// 将来消えるとページングが1ページ目で静かに止まる。numberMatched は required なので
+// こちらで進捗を測る。
+async function fetchAllSearchPages(
+  query: string,
+  categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
+  categoryPref?: PrefectureName,
+  sortBy?: 'title' | 'created' | 'modified',
+): Promise<HubSearchResultList> {
+  const firstPage = await fetchHubJson<HubSearchResultList>(
+    buildSearchUrl(query, categoryLevel, categoryPref, sortBy)
+  );
+  const numberMatched = firstPage.numberMatched;
+
+  const mergedFeatures: HubSearchResult[] = [...firstPage.features];
+  let fetchedCount = firstPage.features.length;
+  let lastPageCount = firstPage.features.length;
+  let pages = 1;
+
+  while (
+    typeof numberMatched === 'number'
+    && fetchedCount < numberMatched
+    // 0件が返ったら startindex が進まず無限ループになるので止める
+    && lastPageCount > 0
+    && pages < MAX_SEARCH_PAGES
+  ) {
+    // startindex は 1 始まり。前回の startindex + limit ではなく実際の取得件数を基準に
+    // することで、API が limit より少なく返しても範囲を飛ばさない。
+    const nextPage = await fetchHubJson<HubSearchResultList>(
+      buildSearchUrl(query, categoryLevel, categoryPref, sortBy, fetchedCount + 1)
+    );
+    lastPageCount = nextPage.features.length;
+    fetchedCount += lastPageCount;
+    mergedFeatures.push(...nextPage.features);
+    pages += 1;
+  }
+
+  return {
+    ...firstPage,
+    features: mergedFeatures,
+    numberReturned: mergedFeatures.length,
+    // 結合済みの結果をキャッシュに書くので、「まだ続きがある」と読める next は残さない
+    links: firstPage.links?.filter((link) => link.rel !== 'next'),
+  };
+}
+
 export async function getHubItemsByQuery(
   query: string,
   categoryLevel?: '全国レベル' | '都道府県レベル' | '市区町村レベル',
@@ -167,9 +220,7 @@ export async function getHubItemsByQuery(
     json = await fs.promises.readFile(cacheFile, 'utf-8')
       .then((data) => JSON.parse(data) as HubSearchResultList);
   } else {
-    json = await fetchHubJson<HubSearchResultList>(
-      buildSearchUrl(query, categoryLevel, categoryPref, sortBy)
-    );
+    json = await fetchAllSearchPages(query, categoryLevel, categoryPref, sortBy);
 
     await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
     await fs.promises.writeFile(cacheFile, JSON.stringify(json));
