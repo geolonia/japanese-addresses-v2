@@ -66,6 +66,11 @@ const SPECS: FixtureSpec[] = [
     lgCodes: ['302015'],
     steps: [mainPrefCity, mainMachiAza, mainRsdt, mainChiban],
   },
+  {
+    name: 'processes_11_fix_rsdt_flags',
+    lgCodes: ['132276'],
+    steps: [mainPrefCity, mainMachiAza, mainRsdt],
+  },
 ];
 
 async function filterZipByLgCode(srcPath: string, destPath: string, lgCodes: string[]): Promise<void> {
