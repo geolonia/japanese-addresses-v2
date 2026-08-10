@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { cityName, MachiAzaApi, machiAzaName, PrefectureApi, prefectureName, SingleCity, SinglePrefecture } from '../data.js';
 import { getRangesFromCSV } from './10_refresh_csv_ranges.js';
-import { correctRsdtFlag } from './11_rsdt_flags.js';
+import { correctRsdtFlagWithAmbiguity, countMachiAzaNames } from './11_rsdt_flags.js';
 
 async function main(argv: string[]) {
   const apiDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
@@ -38,11 +38,15 @@ async function main(argv: string[]) {
       throw e;
     }
 
+    const nameCounts = countMachiAzaNames(maData.data.map((ma) => machiAzaName(ma)));
+
     let toTrue = 0;
     let toFalse = 0;
     for (const ma of maData.data) {
-      const hasRsdtData = rsdtNames.has(machiAzaName(ma));
-      const result = correctRsdtFlag(hasRsdtData, ma.rsdt);
+      const name = machiAzaName(ma);
+      const hasRsdtData = rsdtNames.has(name);
+      const isAmbiguousName = (nameCounts.get(name) || 0) > 1;
+      const result = correctRsdtFlagWithAmbiguity(hasRsdtData, ma.rsdt, isAmbiguousName);
       if (result.correction === 'to_true') {
         toTrue++;
       } else if (result.correction === 'to_false') {
