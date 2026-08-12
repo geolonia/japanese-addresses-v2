@@ -12,6 +12,13 @@ import { createMergedApiData, filterMlitDataByPrefCity } from '../lib/abr_mlit_m
 import { prefectureNameCodes } from '../lib/prefecture_name_codes.js';
 import { lgCodeMatch, loadSettings } from '../lib/settings.js';
 
+// mergeDataLeftJoin は SQLite の json_patch(main, pos) で行を結合しており、
+// 第2引数(pos)側のフィールドが第1引数(main)側の同名フィールドを無条件に
+// 上書きする。MachiAzaData と MachiAzaPosData は両方とも rsdt_addr_flg を
+// 持つため、このヘルパーを挟まないと pos 側の生の(main側と食い違うことが
+// ある)フラグが、main 側で dedup 時に正しくOR結合済みのフラグを黙って
+// 上書きしてしまう。そのため JOIN前に pos の全行から rsdt_addr_flg を除去し、
+// main 側の値を常に優先させる(重複行に限らず全行に適用する)。
 async function* omitPosRsdtFlg(
   source: AsyncIterableIterator<MachiAzaPosData>,
 ): AsyncIterableIterator<Omit<MachiAzaPosData, 'rsdt_addr_flg'>> {
@@ -62,11 +69,13 @@ async function main(argv: string[]) {
       getAndStreamCSVDataForId<MachiAzaData>(machiAzaResult.properties.id),
       ['lg_code', 'machiaza_id'],
       mergeMachiAzaMainRow,
+      'main',
     );
     const posStream = dedupeAdjacentByKey(
       getAndStreamCSVDataForId<MachiAzaPosData>(machiAzaPosResult.properties.id),
       ['lg_code', 'machiaza_id'],
       mergeMachiAzaPosRow,
+      'pos',
     );
     const rawData = mergeDataLeftJoin(mainStream, omitPosRsdtFlg(posStream), ['lg_code', 'machiaza_id']);
 

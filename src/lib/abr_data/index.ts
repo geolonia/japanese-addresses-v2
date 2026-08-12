@@ -54,6 +54,7 @@ export async function *mergeDataLeftJoin<T, U>(left: AsyncIterableIterator<T>, r
 
   const select = db.prepare<void[], {d01: string, d02: string}>(`
     SELECT
+      -- json_patch(a, b) は b 側(right)のフィールドが a 側(left)の同名フィールドを上書きする
       json_patch(l.data, coalesce(r.data, '{}')) AS d01
     FROM
       l

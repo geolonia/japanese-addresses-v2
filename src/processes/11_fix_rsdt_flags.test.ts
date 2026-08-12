@@ -9,7 +9,7 @@ import mainRsdt from './03_make_rsdt.js';
 
 import main from './11_fix_rsdt_flags.js';
 import mainRefreshRanges, { getRangesFromCSV } from './10_refresh_csv_ranges.js';
-import { MachiAzaApi } from '../data.js';
+import { machiAzaName, MachiAzaApi } from '../data.js';
 import { setupFixtureCache } from '../test_helpers/fixture_cache.js';
 
 await test.describe('with filter for 132276 (東京都羽村市)', async () => {
@@ -65,6 +65,25 @@ await test.describe('with filter for 132276 (東京都羽村市)', async () => {
     const otherTownHeader = rsdtHeader.find((h) => !h.name.startsWith('神明台'));
     assert(otherTownHeader, '神明台以外で住居表示データを持つ町字が見つからない(フィクスチャのサニティチェック)');
 
+    // 11_fix_rsdt_flags.ts は toTrue/toFalse が1件もない場合 writeFile を
+    // 呼ばない(src/processes/11_fix_rsdt_flags.ts:58-60)。このフィクスチャは
+    // 02_make_machi_aza の修正により補正0件になったため、上のcsv_ranges
+    // アサーションだけでは書き戻しパス自体が実行されない(=検証が空振りする)
+    // 状態になっていた。そこで実データを持たない町字の rsdt を意図的に
+    // true に書き換え、genuine な to_false 補正(≒writeFileの実行)を発生させる。
+    const rsdtNameSet = new Set(rsdtHeader.map((h) => h.name));
+    const noRsdtDataTarget = beforeApi.data.find(
+      (ma) => ma.machiaza_id !== '0004001' && ma.machiaza_id !== '0002001' && !rsdtNameSet.has(machiAzaName(ma)),
+    );
+    assert(noRsdtDataTarget, '実データを持たない検証用の町字(神明台一丁目・双葉町一丁目以外)が見つからない(フィクスチャのサニティチェック)');
+    const forcedTargetId = noRsdtDataTarget.machiaza_id;
+
+    const forcedApi = JSON.parse(await fs.readFile(jsonPath, 'utf-8')) as MachiAzaApi;
+    const forcedTarget = forcedApi.data.find((ma) => ma.machiaza_id === forcedTargetId);
+    assert(forcedTarget);
+    forcedTarget.rsdt = true;
+    await fs.writeFile(jsonPath, JSON.stringify(forcedApi));
+
     await main(['', '', outDir]);
 
     const afterApi = JSON.parse(await fs.readFile(jsonPath, 'utf-8')) as MachiAzaApi;
@@ -75,6 +94,17 @@ await test.describe('with filter for 132276 (東京都羽村市)', async () => {
     const afterFutabacho1 = afterApi.data.find((ma) => ma.machiaza_id === '0002001');
     assert(afterFutabacho1);
     assert.strictEqual(afterFutabacho1.rsdt, true, '実データがある町字の rsdt: true は維持されるはず(回帰防止)');
+    // 上で意図的に発生させた to_false 補正により writeFile が実際に実行されるため、
+    // このアサーションは(補正0件で書き戻しが空振りする状態ではなく)
+    // 書き戻しパスを genuine に検証できている。
     assert(afterFutabacho1.csv_ranges?.['住居表示'], 'step 11 の書き戻し後も csv_ranges (step 10 の出力) が失われていないはず');
+
+    const afterForcedTarget = afterApi.data.find((ma) => ma.machiaza_id === forcedTargetId);
+    assert(afterForcedTarget);
+    assert.strictEqual(
+      afterForcedTarget.rsdt,
+      undefined,
+      '実データを持たない町字に強制設定した rsdt: true は、step 11 により to_false 補正され undefined に戻るはず',
+    );
   });
 });
