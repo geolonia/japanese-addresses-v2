@@ -5,11 +5,22 @@ import { getHubItemsByQuery, findResultByTypeAndArea, getAndStreamCSVDataForId }
 import { MachiAzaApi, SingleMachiAza } from '../data.js';
 import { MachiAzaData, MachiAzaPosData } from '../lib/abr_data/machi_aza.js';
 import { mergeDataLeftJoin } from '../lib/abr_data/index.js';
+import { dedupeAdjacentByKey, mergeMachiAzaMainRow, mergeMachiAzaPosRow } from '../lib/abr_data/machi_aza_dedup.js';
 import { rawToMachiAza } from './02_machi_aza.js';
 import { downloadAndExtractNlftpMlitFile, NlftpMlitDataRow } from '../lib/mlit_nlftp.js';
 import { createMergedApiData, filterMlitDataByPrefCity } from '../lib/abr_mlit_merge_tools.js';
 import { prefectureNameCodes } from '../lib/prefecture_name_codes.js';
 import { lgCodeMatch, loadSettings } from '../lib/settings.js';
+
+async function* omitPosRsdtFlg(
+  source: AsyncIterableIterator<MachiAzaPosData>,
+): AsyncIterableIterator<Omit<MachiAzaPosData, 'rsdt_addr_flg'>> {
+  for await (const row of source) {
+    const { rsdt_addr_flg, ...rest } = row;
+    void rsdt_addr_flg;
+    yield rest;
+  }
+}
 
 async function outputMachiAzaData(
   outDir: string,
@@ -47,9 +58,17 @@ async function main(argv: string[]) {
     if (!machiAzaPosResult) {
       throw new Error(`「${prefName} 町字マスター位置参照拡張」データセットが見つかりませんでした`);
     }
-    const mainStream = getAndStreamCSVDataForId<MachiAzaData>(machiAzaResult.properties.id);
-    const posStream = getAndStreamCSVDataForId<MachiAzaPosData>(machiAzaPosResult.properties.id);
-    const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id']);
+    const mainStream = dedupeAdjacentByKey(
+      getAndStreamCSVDataForId<MachiAzaData>(machiAzaResult.properties.id),
+      ['lg_code', 'machiaza_id'],
+      mergeMachiAzaMainRow,
+    );
+    const posStream = dedupeAdjacentByKey(
+      getAndStreamCSVDataForId<MachiAzaPosData>(machiAzaPosResult.properties.id),
+      ['lg_code', 'machiaza_id'],
+      mergeMachiAzaPosRow,
+    );
+    const rawData = mergeDataLeftJoin(mainStream, omitPosRsdtFlg(posStream), ['lg_code', 'machiaza_id']);
 
     let lastLGCode: string | undefined = undefined;
     let lastCityName: string | undefined = undefined;
