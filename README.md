@@ -17,7 +17,7 @@
 
 このデータを使用した API をご提供しています。現在、制限無しで無料公開をしていますが、様子を見ながら公開の停止や変更などを行うことがあります。商用稼働は、ご自身でデータを作成しホスティングすることを強くおすすめします。 Geolonia では有償で管理・ホスティングするサービスがありますので、ご利用の方はお問い合わせください。
 
-#### 都道府県・市区町村エンドポイント
+### 都道府県・市区町村エンドポイント
 
 ```
 https://japanese-addresses-v2.geoloniamaps.com/api/ja.json
@@ -50,7 +50,7 @@ https://japanese-addresses-v2.geoloniamaps.com/api/ja.json
   ...
 ```
 
-#### 町字エンドポイント
+### 町字エンドポイント
 
 ```
 https://japanese-addresses-v2.geoloniamaps.com/api/ja/<都道府県名>/<市区町村名>.json
@@ -93,7 +93,7 @@ $ npm run run:10_refresh_csv_ranges # 町字APIのCSVレンジを更新 (町字A
 $ npm run run:99_create_stats # 統計情報を作成
 ```
 
-#### APIビルド設定
+### APIビルド設定
 
 `settings.json` に設定を入れてください。内容は `src/lib/settings.ts` を参照してください。
 
@@ -105,7 +105,7 @@ $ npm run run:99_create_stats # 統計情報を作成
 }
 ```
 
-#### アーカイブファイル作成
+### アーカイブファイル作成
 
 `deploy/01a_create_archive.sh` を参照してください
 
