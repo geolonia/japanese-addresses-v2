@@ -11,6 +11,9 @@ import { MachiAzaData, MachiAzaPosData } from './machi_aza.js';
 // - `mergeMachiAzaMainRow` は、`rsdt_addr_flg`(住居表示フラグ)について
 //   重複する2行のいずれかが `'1'` であれば結果も `'1'` とするOR結合を行う
 //   (両方 `'0'` の場合のみ `'0'` のまま)。
+// - フラグ以外のフィールドが食い違う想定外のケースでは、警告を出しつつ
+//   先に出現した行の値を採用して継続する(全国パイプラインを1件の想定外
+//   データで止めない方針)。OR結合はこの場合も従来どおり適用する。
 
 function makeKey<T>(row: T, keys: (keyof T & string)[]): string {
   const record = row as unknown as Record<string, string>;
@@ -63,11 +66,13 @@ export function mergeMachiAzaMainRow(a: MachiAzaData, b: MachiAzaData): MachiAza
     return a[field] !== b[field];
   });
 
+  // 想定外の不一致は警告するが、rsdt_addr_flgのOR結合自体は続行する。
+  // ここでreturnしてしまうと、重複行の解消という本来の目的(食い違うflgの
+  // 統合)が、無関係なフィールドの不一致を巻き添えにして達成できなくなる。
   if (mismatchedFields.length > 0) {
     console.warn(
-      `mergeMachiAzaMainRow: unexpected field mismatch for lg_code=${a.lg_code} machiaza_id=${a.machiaza_id}: ${mismatchedFields.join(', ')} (rsdt_addr_flgのOR結合もこの不一致によりスキップされた)`,
+      `mergeMachiAzaMainRow: unexpected field mismatch for lg_code=${a.lg_code} machiaza_id=${a.machiaza_id}: ${mismatchedFields.join(', ')} (a側の値を採用して継続する)`,
     );
-    return a;
   }
 
   if (a.rsdt_addr_flg === '1') {
@@ -80,8 +85,12 @@ export function mergeMachiAzaMainRow(a: MachiAzaData, b: MachiAzaData): MachiAza
 }
 
 export function mergeMachiAzaPosRow(a: MachiAzaPosData, b: MachiAzaPosData): MachiAzaPosData {
+  // rsdt_addr_flg は 02_make_machi_aza.ts の omitPosRsdtFlg がJOIN前に
+  // pos側から破棄する(main側の値を常に優先する)フィールドなので、
+  // ここで食い違っていても出力には影響しない。比較対象に含めると
+  // 全国実行時に無害な差異で警告が出続けるため除外する。
   const mismatchedFields = (Object.keys(a) as (keyof MachiAzaPosData)[]).filter(
-    (field) => a[field] !== b[field],
+    (field) => field !== 'rsdt_addr_flg' && a[field] !== b[field],
   );
 
   if (mismatchedFields.length > 0) {

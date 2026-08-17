@@ -52,9 +52,9 @@ await test.describe('with filter for 132276 (東京都羽村市)', async () => {
 
     // 双葉町一丁目 (machiaza_id 0002001) は町字マスター・位置参照拡張の両方が
     // rsdt_addr_flg=1 で一致し、実際に -住居表示.txt にデータが存在する町字。
-    // 名前ベースの動的検索(`machiAzaName(ma) === otherTownHeader.name`)は、
-    // 同名の町字が市区町村内に複数存在するケースでは誤ったエントリに一致し
-    // うるため、回帰防止アサーションは machiaza_id を直接指定して固定する。
+    // 町字名でエントリを引き当てる検索は、同名の町字が市区町村内に複数存在
+    // するケースでは誤ったエントリに一致しうるため、回帰防止アサーションは
+    // machiaza_id を直接指定して固定する。
     const beforeFutabacho1 = beforeApi.data.find((ma) => ma.machiaza_id === '0002001');
     assert(beforeFutabacho1, '双葉町一丁目 (0002001) がフィクスチャに存在しない');
     assert.strictEqual(beforeFutabacho1.rsdt, true, '実データを持つ町字は補正前から rsdt: true のはず');
@@ -62,8 +62,17 @@ await test.describe('with filter for 132276 (東京都羽村市)', async () => {
 
     const rsdtHeader = await getRangesFromCSV(`${outDir}/ja/東京都/羽村市-住居表示.txt`);
     assert(rsdtHeader, '-住居表示.txt のヘッダーが読めない');
-    const otherTownHeader = rsdtHeader.find((h) => !h.name.startsWith('神明台'));
-    assert(otherTownHeader, '神明台以外で住居表示データを持つ町字が見つからない(フィクスチャのサニティチェック)');
+    assert(rsdtHeader.length > 0, '住居表示データを持つ町字が1件も無い(フィクスチャのサニティチェック)');
+    // 神明台一丁目が補正の前後を通じて rsdt: undefined のままである理由は、
+    // 「-住居表示.txt に同名のヘッダーが無い(=実データを持たない)」ことにある。
+    // この前提を明示しないと、下のアサーションが「曖昧名による to_true 抑制
+    // ガードの検証」に見えてしまうが、羽村市フィクスチャには同名の町字が
+    // 1件も存在しないためそのガードはここでは発火しない(ガード自体は
+    // 11_rsdt_flags.test.ts の単体テストで検証済み)。
+    assert(
+      !rsdtHeader.some((h) => h.name === machiAzaName(beforeShimmeidai1)),
+      '神明台一丁目が実データを持たない前提が崩れている(フィクスチャのサニティチェック)',
+    );
 
     // 11_fix_rsdt_flags.ts は toTrue/toFalse が1件もない場合 writeFile を
     // 呼ばない(src/processes/11_fix_rsdt_flags.ts:58-60)。このフィクスチャは

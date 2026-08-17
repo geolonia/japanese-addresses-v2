@@ -158,6 +158,19 @@ await describe('abr_data/machi_aza_dedup', async () => {
       assert.strictEqual(merged.oaza_cho, '南９条西五丁目');
       assert.strictEqual(warn.mock.calls.length, 1);
     });
+
+    await test('flg以外が不一致でもrsdt_addr_flgのOR結合は維持する', (t) => {
+      const warn = t.mock.method(console, 'warn', () => {});
+      const a = makeMainRow({ efct_date: '1947-04-17', rsdt_addr_flg: '0', rsdt_addr_mtd_code: '0' });
+      const b = makeMainRow({ efct_date: '2020-01-01', rsdt_addr_flg: '1', rsdt_addr_mtd_code: '2' });
+
+      const merged = mergeMachiAzaMainRow(a, b);
+
+      assert.strictEqual(merged.rsdt_addr_flg, '1');
+      assert.strictEqual(merged.rsdt_addr_mtd_code, '2');
+      assert.strictEqual(merged.efct_date, '1947-04-17');
+      assert.strictEqual(warn.mock.calls.length, 1);
+    });
   });
 
   await describe('mergeMachiAzaPosRow', async () => {
@@ -179,6 +192,17 @@ await describe('abr_data/machi_aza_dedup', async () => {
 
       assert.strictEqual(merged.rep_lon, '141.34');
       assert.strictEqual(warn.mock.calls.length, 1);
+    });
+
+    await test('JOIN前に破棄されるrsdt_addr_flgだけの差異では警告しない', (t) => {
+      const warn = t.mock.method(console, 'warn', () => {});
+      const a = makePosRow({ rsdt_addr_flg: '0' });
+      const b = makePosRow({ rsdt_addr_flg: '1' });
+
+      const merged = mergeMachiAzaPosRow(a, b);
+
+      assert.deepStrictEqual(merged, a);
+      assert.strictEqual(warn.mock.calls.length, 0);
     });
   });
 });
