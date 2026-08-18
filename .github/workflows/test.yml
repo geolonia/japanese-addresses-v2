@@ -35,6 +35,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # npm run build は tsconfig.dist-*.json 経由で src/data.ts のみを対象にするため、
+      # テストコードなどの型エラーを検出できない。tsconfig.json 全体を型検査する。
+      - name: Type check
+        run: npm run typecheck
+
       - name: Lint
         run: npm run lint
 

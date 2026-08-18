@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import cliProgress from 'cli-progress';
 
-import { getHubItemsByQuery, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId } from '../lib/hub.js';
+import { getHubItemsByQuery, findResultByTypeAndArea, getAndParseCSVDataForId, getAndStreamCSVDataForId, mayBeTruncated } from '../lib/hub.js';
 import { machiAzaName, SingleChiban, SingleMachiAza } from '../data.js';
 import { projectABRData } from '../lib/proj.js';
 import { MachiAzaData } from '../lib/abr_data/machi_aza.js';
@@ -141,20 +141,45 @@ async function main(argv: string[]) {
         area += `${ma.ward}`;
       }
       const searchQuery = `${area} 地番マスター`;
-      const results = await getHubItemsByQuery(`${area} 地番マスター`, '市区町村レベル', ma.pref);
+      const results = await getHubItemsByQuery(searchQuery, '市区町村レベル', ma.pref);
       const chibanDataRef = findResultByTypeAndArea(results.features, '地番マスター', area);
       const chibanPosDataRef = findResultByTypeAndArea(results.features, '地番マスター位置参照拡張', area);
+      // 検索結果が切り捨てられている場合、データセットは存在するのに枠外へ落ちている
+      // 可能性がある。「見つからない」というログだけでは「元々存在しない」と読めてしまい
+      // データ欠落に気づけないため、地番マスター・位置参照拡張のどちらが欠けた場合も明示する。
+      // 文言は hub.ts の warnIfTruncated と揃える。片方だけ言い回しが違うと、
+      // ログを grep したときに同じ事象の片側しか見つからない。
+      const truncationNote = mayBeTruncated(results)
+        ? `HUB API の検索結果を全件取得できませんでした `
+          + `(numberMatched: ${results.numberMatched ?? '不明'}, numberReturned: ${results.numberReturned})。`
+          + `データセットが存在するのに取得できていない可能性があります。`
+        : undefined;
+
       if (!chibanDataRef) {
-        console.error(`Insufficient data found for ${searchQuery} (地番マスター)`);
+        // 地番マスター自体が無いとこの市区町村は丸ごと出力されない
+        console.error(
+          `Insufficient data found for ${searchQuery} (地番マスター)`
+          + (truncationNote ? `。${truncationNote}` : '')
+        );
         progress.increment();
         continue;
+      }
+
+      if (!chibanPosDataRef) {
+        if (truncationNote) {
+          console.error(
+            `「${area} 地番マスター位置参照拡張」が検索結果に見つかりませんでした。${truncationNote}`
+          );
+        } else {
+          // 位置参照拡張が配信されていない市区町村もあるため、座標なしで続行する
+          console.warn(`「${area} 地番マスター位置参照拡張」は配信されていないため、座標なしで出力します`);
+        }
       }
 
       const mainStream = getAndStreamCSVDataForId<ChibanData>(chibanDataRef.properties.id);
       const posStream = chibanPosDataRef ?
         getAndStreamCSVDataForId<ChibanPosData>(chibanPosDataRef.properties.id)
         :
-        // 位置参照拡張データが無い場合もある
         (async function*() {})();
 
       const rawData = mergeDataLeftJoin(mainStream, posStream, ['lg_code', 'machiaza_id', 'prc_id'], true);

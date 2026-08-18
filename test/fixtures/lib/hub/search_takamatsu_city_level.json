@@ -1,0 +1,538 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "id": "a351f40c891c44958b29ce9ea9843721",
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              134.036574,
+              34.350791
+            ],
+            [
+              134.05657399999998,
+              34.350791
+            ],
+            [
+              134.05657399999998,
+              34.334790999999996
+            ],
+            [
+              134.036574,
+              34.334790999999996
+            ],
+            [
+              134.036574,
+              34.350791
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "snippet": null,
+        "extent": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                134.036574,
+                34.350791
+              ],
+              [
+                134.05657399999998,
+                34.350791
+              ],
+              [
+                134.05657399999998,
+                34.334790999999996
+              ],
+              [
+                134.036574,
+                34.334790999999996
+              ],
+              [
+                134.036574,
+                34.350791
+              ]
+            ]
+          ]
+        },
+        "commentsEnabled": true,
+        "groupDesignations": null,
+        "access": "public",
+        "apiToken2ExpirationDate": -1,
+        "typeKeywords": [
+          "Data",
+          "Document"
+        ],
+        "description": "最終更新日: 2026-03-10T13:56:22.000Z",
+        "licenseInfo": "https://creativecommons.org/licenses/by/4.0/deed.ja",
+        "title": "香川県 高松市 町字マスター（フルセット）",
+        "type": "Document Link",
+        "screenshots": [],
+        "subInfo": 0,
+        "advancedSettings": null,
+        "appCategories": [],
+        "modified": 1773186379000,
+        "avgRating": 0,
+        "id": "a351f40c891c44958b29ce9ea9843721",
+        "categories": [
+          "/Categories/市区町村レベル/香川県"
+        ],
+        "spatialReference": null,
+        "numRatings": 0,
+        "owner": "digitalagency-br",
+        "accessInformation": "https://www.digital.go.jp/policies/base_registry_address_tos",
+        "largeThumbnail": null,
+        "lastViewed": 1768374000000,
+        "thumbnail": null,
+        "languages": [],
+        "created": 1754771002000,
+        "documentation": null,
+        "banner": null,
+        "classification": null,
+        "url": "https://data.address-br.digital.go.jp/mt_town_fullset/city/mt_town_fullset_city372013.csv.zip",
+        "tags": [
+          "町字マスター（フルセット）",
+          "ABR",
+          "オープンデータ"
+        ],
+        "numViews": 11,
+        "numComments": 0,
+        "size": 93,
+        "listed": false,
+        "scoreCompleteness": 51,
+        "culture": "english (united states)",
+        "industries": [],
+        "apiToken1ExpirationDate": -1,
+        "name": null,
+        "guid": null,
+        "proxyFilter": null,
+        "properties": null,
+        "license": "CC-BY-4.0"
+      },
+      "time": null,
+      "links": [
+        {
+          "rel": "self",
+          "type": "application/geo+json",
+          "title": "This document as GeoJSON",
+          "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items/a351f40c891c44958b29ce9ea9843721"
+        },
+        {
+          "rel": "collection",
+          "type": "application/json",
+          "title": "All",
+          "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all"
+        }
+      ]
+    },
+    {
+      "id": "4f747e7cea8d4e2fbc77291d37afb557",
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              134.036574,
+              34.350791
+            ],
+            [
+              134.05657399999998,
+              34.350791
+            ],
+            [
+              134.05657399999998,
+              34.334790999999996
+            ],
+            [
+              134.036574,
+              34.334790999999996
+            ],
+            [
+              134.036574,
+              34.350791
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "snippet": null,
+        "extent": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                134.036574,
+                34.350791
+              ],
+              [
+                134.05657399999998,
+                34.350791
+              ],
+              [
+                134.05657399999998,
+                34.334790999999996
+              ],
+              [
+                134.036574,
+                34.334790999999996
+              ],
+              [
+                134.036574,
+                34.350791
+              ]
+            ]
+          ]
+        },
+        "commentsEnabled": true,
+        "groupDesignations": null,
+        "access": "public",
+        "apiToken2ExpirationDate": -1,
+        "typeKeywords": [
+          "Data",
+          "Document"
+        ],
+        "description": "最終更新日: 2026-03-10T13:56:18.000Z",
+        "licenseInfo": "https://creativecommons.org/licenses/by/4.0/deed.ja",
+        "title": "香川県 高松市 町字マスター",
+        "type": "Document Link",
+        "screenshots": [],
+        "subInfo": 0,
+        "advancedSettings": null,
+        "appCategories": [],
+        "modified": 1773182938000,
+        "avgRating": 0,
+        "id": "4f747e7cea8d4e2fbc77291d37afb557",
+        "categories": [
+          "/Categories/市区町村レベル/香川県"
+        ],
+        "spatialReference": null,
+        "numRatings": 0,
+        "owner": "digitalagency-br",
+        "accessInformation": "https://www.digital.go.jp/policies/base_registry_address_tos",
+        "largeThumbnail": null,
+        "lastViewed": 1761022800000,
+        "thumbnail": null,
+        "languages": [],
+        "created": 1754768374000,
+        "documentation": null,
+        "banner": null,
+        "classification": null,
+        "url": "https://data.address-br.digital.go.jp/mt_town/city/mt_town_city372013.csv.zip",
+        "tags": [
+          "町字マスター",
+          "ABR",
+          "オープンデータ"
+        ],
+        "numViews": 10,
+        "numComments": 0,
+        "size": 77,
+        "listed": false,
+        "scoreCompleteness": 51,
+        "culture": "english (united states)",
+        "industries": [],
+        "apiToken1ExpirationDate": -1,
+        "name": null,
+        "guid": null,
+        "proxyFilter": null,
+        "properties": null,
+        "license": "CC-BY-4.0"
+      },
+      "time": null,
+      "links": [
+        {
+          "rel": "self",
+          "type": "application/geo+json",
+          "title": "This document as GeoJSON",
+          "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items/4f747e7cea8d4e2fbc77291d37afb557"
+        },
+        {
+          "rel": "collection",
+          "type": "application/json",
+          "title": "All",
+          "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all"
+        }
+      ]
+    },
+    {
+      "id": "877acf576dbe484a80a60d16bad8d312",
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              134.036574,
+              34.350791
+            ],
+            [
+              134.05657399999998,
+              34.350791
+            ],
+            [
+              134.05657399999998,
+              34.334790999999996
+            ],
+            [
+              134.036574,
+              34.334790999999996
+            ],
+            [
+              134.036574,
+              34.350791
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "snippet": null,
+        "extent": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                134.036574,
+                34.350791
+              ],
+              [
+                134.05657399999998,
+                34.350791
+              ],
+              [
+                134.05657399999998,
+                34.334790999999996
+              ],
+              [
+                134.036574,
+                34.334790999999996
+              ],
+              [
+                134.036574,
+                34.350791
+              ]
+            ]
+          ]
+        },
+        "commentsEnabled": true,
+        "groupDesignations": null,
+        "access": "public",
+        "apiToken2ExpirationDate": -1,
+        "typeKeywords": [
+          "Data",
+          "Document"
+        ],
+        "description": "最終更新日: 2026-06-23T11:06:50.000Z",
+        "licenseInfo": "https://creativecommons.org/licenses/by/4.0/deed.ja",
+        "title": "香川県 高松市 地番マスター位置参照拡張",
+        "type": "Document Link",
+        "screenshots": [],
+        "subInfo": 0,
+        "advancedSettings": null,
+        "appCategories": [],
+        "modified": 1782257947000,
+        "avgRating": 0,
+        "id": "877acf576dbe484a80a60d16bad8d312",
+        "categories": [
+          "/Categories/市区町村レベル/香川県"
+        ],
+        "spatialReference": null,
+        "numRatings": 0,
+        "owner": "digitalagency-br",
+        "accessInformation": "https://www.digital.go.jp/policies/base_registry_address_tos",
+        "largeThumbnail": null,
+        "lastViewed": 1760266800000,
+        "thumbnail": null,
+        "languages": [],
+        "created": 1754810073000,
+        "documentation": null,
+        "banner": null,
+        "classification": null,
+        "url": "https://data.address-br.digital.go.jp/mt_parcel_pos/city/mt_parcel_pos_city372013.csv.zip",
+        "tags": [
+          "地番マスター位置参照拡張",
+          "ABR",
+          "オープンデータ"
+        ],
+        "numViews": 5,
+        "numComments": 0,
+        "size": 89,
+        "listed": false,
+        "scoreCompleteness": 51,
+        "culture": "english (united states)",
+        "industries": [],
+        "apiToken1ExpirationDate": -1,
+        "name": null,
+        "guid": null,
+        "proxyFilter": null,
+        "properties": null,
+        "license": "CC-BY-4.0"
+      },
+      "time": null,
+      "links": [
+        {
+          "rel": "self",
+          "type": "application/geo+json",
+          "title": "This document as GeoJSON",
+          "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items/877acf576dbe484a80a60d16bad8d312"
+        },
+        {
+          "rel": "collection",
+          "type": "application/json",
+          "title": "All",
+          "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all"
+        }
+      ]
+    },
+    {
+      "id": "f21c94640cce47c082f06604deac42ab",
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              134.036574,
+              34.350791
+            ],
+            [
+              134.05657399999998,
+              34.350791
+            ],
+            [
+              134.05657399999998,
+              34.334790999999996
+            ],
+            [
+              134.036574,
+              34.334790999999996
+            ],
+            [
+              134.036574,
+              34.350791
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "snippet": null,
+        "extent": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [
+                134.036574,
+                34.350791
+              ],
+              [
+                134.05657399999998,
+                34.350791
+              ],
+              [
+                134.05657399999998,
+                34.334790999999996
+              ],
+              [
+                134.036574,
+                34.334790999999996
+              ],
+              [
+                134.036574,
+                34.350791
+              ]
+            ]
+          ]
+        },
+        "commentsEnabled": true,
+        "groupDesignations": null,
+        "access": "public",
+        "apiToken2ExpirationDate": -1,
+        "typeKeywords": [
+          "Data",
+          "Document"
+        ],
+        "description": "最終更新日: 2026-02-25T16:43:57.000Z",
+        "licenseInfo": "https://creativecommons.org/licenses/by/4.0/deed.ja",
+        "title": "香川県 高松市 地番マスター",
+        "type": "Document Link",
+        "screenshots": [],
+        "subInfo": 0,
+        "advancedSettings": null,
+        "appCategories": [],
+        "modified": 1772061556000,
+        "avgRating": 0,
+        "id": "f21c94640cce47c082f06604deac42ab",
+        "categories": [
+          "/Categories/市区町村レベル/香川県"
+        ],
+        "spatialReference": null,
+        "numRatings": 0,
+        "owner": "digitalagency-br",
+        "accessInformation": "https://www.digital.go.jp/policies/base_registry_address_tos",
+        "largeThumbnail": null,
+        "lastViewed": 1762682400000,
+        "thumbnail": null,
+        "languages": [],
+        "created": 1754777750000,
+        "documentation": null,
+        "banner": null,
+        "classification": null,
+        "url": "https://data.address-br.digital.go.jp/mt_parcel/city/mt_parcel_city372013.csv.zip",
+        "tags": [
+          "地番マスター",
+          "ABR",
+          "オープンデータ"
+        ],
+        "numViews": 8,
+        "numComments": 0,
+        "size": 81,
+        "listed": false,
+        "scoreCompleteness": 51,
+        "culture": "english (united states)",
+        "industries": [],
+        "apiToken1ExpirationDate": -1,
+        "name": null,
+        "guid": null,
+        "proxyFilter": null,
+        "properties": null,
+        "license": "CC-BY-4.0"
+      },
+      "time": null,
+      "links": [
+        {
+          "rel": "self",
+          "type": "application/geo+json",
+          "title": "This document as GeoJSON",
+          "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items/f21c94640cce47c082f06604deac42ab"
+        },
+        {
+          "rel": "collection",
+          "type": "application/json",
+          "title": "All",
+          "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all"
+        }
+      ]
+    }
+  ],
+  "timestamp": "2026-08-06T06:48:33.436Z",
+  "numberMatched": 4,
+  "numberReturned": 4,
+  "links": [
+    {
+      "rel": "self",
+      "type": "application/geo+json",
+      "title": "This document as GeoJSON",
+      "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items"
+    },
+    {
+      "rel": "collection",
+      "type": "application/json",
+      "title": "All",
+      "href": "https://dataset.address-br.digital.go.jp/api/search/v1/collections/all"
+    }
+  ]
+}

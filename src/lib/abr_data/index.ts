@@ -52,6 +52,11 @@ export async function *mergeDataLeftJoin<T, U>(left: AsyncIterableIterator<T>, r
     CREATE INDEX r_key ON r(key);
   `);
 
+  // 呼び出し元 (02_make_machi_aza など) は lg_code が連続していることを前提に
+  // 市区町村ごとの出力ファイルを確定するため、左入力の順序を保つ必要がある。
+  // ORDER BY が無いと順序はクエリプラン任せ (l_key インデックス走査が選ばれると
+  // キー順になる) なので、挿入順である rowid 順を明示する。
+  // rowid 順のスキャンは l の自然順なので、追加のソートコストは発生しない。
   const select = db.prepare<void[], {d01: string, d02: string}>(`
     SELECT
       -- json_patch(a, b) は b 側(right)のフィールドが a 側(left)の同名フィールドを上書きする
@@ -59,6 +64,8 @@ export async function *mergeDataLeftJoin<T, U>(left: AsyncIterableIterator<T>, r
     FROM
       l
       LEFT JOIN r ON l.key = r.key
+    ORDER BY
+      l.rowid
   `);
   for (const data of select.iterate()) {
     yield JSON.parse(data.d01);

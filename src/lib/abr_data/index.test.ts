@@ -51,5 +51,33 @@ await describe('abr_data/index', async () => {
         { id: 3, name: 'Charlie' },
       ]);
     });
+
+    // 02_make_machi_aza などは lg_code が連続していることを前提に市区町村ごとの
+    // 出力ファイルを確定する。結合結果がキー順に並び替えられると、同じ市区町村を
+    // 複数回出力して後続の断片が先行ファイルを上書きしてしまう。
+    await test('it preserves the order of the left iterator', async () => {
+      const one = async function *() {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        yield *[
+          { id: 3, name: 'Charlie' },
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ];
+      };
+      const two = async function *() {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        yield *[{ id: 1, age: 25 }, { id: 2, age: 30 }, { id: 3, age: 35 }];
+      };
+
+      const res = await Array.fromAsync(
+        index.mergeDataLeftJoin(one(), two(), ['id'])
+      );
+
+      assert.deepStrictEqual(res, [
+        { id: 3, name: 'Charlie', age: 35 },
+        { id: 1, name: 'Alice', age: 25 },
+        { id: 2, name: 'Bob', age: 30 },
+      ]);
+    });
   });
 });

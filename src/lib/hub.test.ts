@@ -2,114 +2,685 @@ import path from 'node:path';
 import fs from 'node:fs';
 import assert from 'node:assert';
 import { describe, test, beforeEach } from 'node:test';
-import { MockAgent, setGlobalDispatcher, Agent } from 'undici';
 
 import * as hub from './hub.js';
+import { createTempCacheDir } from '../test_helpers/fixture_cache.js';
+import { withMockAgent } from '../test_helpers/mock_agent.js';
 
-const CACHE_HUB_DIR = path.join(import.meta.dirname, '..', '..', 'cache', 'hub');
-const CACHE_FILES_DIR = path.join(import.meta.dirname, '..', '..', 'cache', 'files');
 const FIXTURES_DIR = path.join(import.meta.dirname, '..', '..', 'test', 'fixtures', 'lib', 'hub');
+const HUB_ORIGIN = 'https://dataset.address-br.digital.go.jp';
+const CDN_ORIGIN = 'https://data.address-br.digital.go.jp';
 
-function urlToCacheKey(url: string): string {
-  return url.replace(/[^a-zA-Z0-9]/g, '_');
+// 実APIに当てるテストは既定でスキップする。検索API(dataset.address-br.digital.go.jp)は
+// 国外制限が無いため、RUN_NETWORK_TESTS=1 を指定すればABR側のスキーマ変更検知に使える。
+const skipNetworkTests = process.env.RUN_NETWORK_TESTS
+  ? false
+  : 'RUN_NETWORK_TESTS=1 を指定すると実行されます';
+
+// console.warn / console.log を差し替えて fn を実行し、戻り値と出力をまとめて返す。
+// ページ追随のテストは戻り値と出力の両方を見るため、各テストに try/finally を書くと
+// 同じ定型が並ぶ。戻り値をここから返すことで、呼び出し側で `let res;` を宣言せずに済み
+// (try の外に置くと推論が効かず明示的な型注釈が要る)、ログのノイズも抑えられる。
+async function withCapturedConsole<T>(fn: () => Promise<T>): Promise<{
+  result: T,
+  warnings: string[],
+  logs: string[],
+}> {
+  const warnings: string[] = [];
+  const logs: string[] = [];
+  const originalWarn = console.warn;
+  const originalLog = console.log;
+  console.warn = (...args: unknown[]) => { warnings.push(args.map(String).join(' ')); };
+  console.log = (...args: unknown[]) => { logs.push(args.map(String).join(' ')); };
+  try {
+    return { result: await fn(), warnings, logs };
+  } finally {
+    console.warn = originalWarn;
+    console.log = originalLog;
+  }
+}
+
+function readJsonFixture(name: string): object {
+  return JSON.parse(fs.readFileSync(path.join(FIXTURES_DIR, name), 'utf-8')) as object;
+}
+
+// 指定した文字列がすべて含まれるリクエストパスにマッチする。
+// limit などのクエリ引数が変わってもモックの指定を書き換えずに済むよう、完全一致は避ける。
+function pathContaining(...fragments: string[]) {
+  return (requestPath: string) => fragments.every((f) => requestPath.includes(encodeURIComponent(f)));
+}
+
+// pathContaining は fragment を encodeURIComponent してから照合するため、
+// 'startindex=101' を渡すと 'startindex%3D101' になってマッチしない。
+// 生のクエリ文字列を見たいページング用に別のヘルパーを用意する。
+function pathWithStartIndex(startIndex: number | undefined, ...fragments: string[]) {
+  return (requestPath: string) => (
+    fragments.every((f) => requestPath.includes(encodeURIComponent(f)))
+    && (startIndex === undefined
+      ? !requestPath.includes('startindex=')
+      // 'startindex=5' が 'startindex=50' にも部分一致してしまわないよう、
+      // 値の直後を & または文字列末尾に限定する。
+      : new RegExp(`[?&]startindex=${startIndex}(&|$)`).test(requestPath))
+  );
+}
+
+// ページングのテスト用に最小限の feature を作る。
+// 実フィクスチャは 1 件 40 プロパティ超あり、ページを手で書くと読めなくなるため。
+function makeFeature(id: string, title: string) {
+  return {
+    id,
+    type: 'Feature',
+    geometry: null,
+    properties: {
+      id,
+      title,
+      description: '',
+      url: `https://example.com/${id}.csv.zip`,
+      created: 0,
+      modified: 0,
+    },
+  };
+}
+
+// 1ページ分のレスポンスを作る。numberMatched は全体の一致件数、
+// numberReturned はこのページの件数。
+// nextStartIndex を渡すと、実APIが後続ページのあるレスポンスに付ける rel=next リンクを模した
+// リンクを追加する (次のページが無い場合は省略する = 実APIの挙動)。
+function makePage(numberMatched: number | undefined, features: ReturnType<typeof makeFeature>[], nextStartIndex?: number) {
+  const links: Record<string, string>[] = [
+    { rel: 'self', type: 'application/geo+json', title: 'This document as GeoJSON', href: 'https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items' },
+  ];
+  if (typeof nextStartIndex === 'number') {
+    links.push({ rel: 'next', type: 'application/geo+json', title: 'items (next)', href: `https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items?startindex=${nextStartIndex}` });
+  }
+  const page: Record<string, unknown> = {
+    type: 'FeatureCollection',
+    timestamp: '2026-08-09T00:00:00.000Z',
+    numberReturned: features.length,
+    features,
+    links,
+  };
+  if (typeof numberMatched === 'number') {
+    page.numberMatched = numberMatched;
+  }
+  return page;
 }
 
 await describe('hub', async () => {
+  // テスト毎に空の一時 CACHE_DIR を割り当てる。リポジトリ直下の cache/ を消すと
+  // ローカルの実データキャッシュや CI の actions/cache (path: cache) を壊すため。
   beforeEach(() => {
-    if (fs.existsSync(CACHE_HUB_DIR)) {
-      try {
-        fs.rmSync(CACHE_HUB_DIR, { recursive: true });
-      } catch (err) {
-        console.error('Error cleaning up cache directory:', err);
-      }
-    }
+    createTempCacheDir('lib_hub');
   });
 
   await test.describe('getHubItemsByQuery', async () => {
     await test('getHubItemsByQuery should find existing data', async () => {
-      const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
-      assert.ok(res.numberMatched > 0);
-      assert.ok(res.features.length >= res.numberMatched);
+      await withMockAgent(async (mockAgent) => {
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, readJsonFixture('search_takamatsu_city_level.json'));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
+        // SEARCH_RESULT_LIMIT が API の上限以下なら numberMatched は必ず返る
+        assert.strictEqual(typeof res.numberMatched, 'number');
+        assert.ok(res.numberMatched! > 0);
+        assert.strictEqual(res.features.length, res.numberReturned);
+        // 切り捨てが起きると numberReturned < numberMatched になる
+        assert.ok(res.numberMatched! >= res.numberReturned);
+        assert.ok(
+          hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'),
+          '「香川県 高松市 地番マスター」が結果に含まれること'
+        );
+      });
     });
 
     await test('getHubItemsByQuery should not find non-existing data', async () => {
-      const res = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');
-      assert.ok(res.numberMatched === 0);
-      assert.ok(res.features.length === 0);
+      await withMockAgent(async (mockAgent) => {
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '全国レベル', '香川県'), method: 'GET' })
+          .reply(200, readJsonFixture('search_takamatsu_national_level.json'));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');
+        assert.ok(res.numberMatched === 0);
+        assert.ok(res.features.length === 0);
+      });
+    });
+
+    await test('getHubItemsByQuery should not reuse a cache saved with a different limit', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // limit を含まない旧形式のキャッシュを配置しても読まれないことを確認する。
+        // 旧キャッシュは小さい limit で切り捨てられている可能性があるため。
+        const staleCacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined.json'
+        );
+        fs.mkdirSync(path.dirname(staleCacheFile), { recursive: true });
+        fs.writeFileSync(staleCacheFile, JSON.stringify({
+          type: 'FeatureCollection',
+          numberMatched: 12,
+          numberReturned: 12,
+          features: [],
+        }));
+
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, readJsonFixture('search_takamatsu_city_level.json'));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        // 旧キャッシュ (numberMatched: 12 / features: 0) ではなく、実際に取得した結果が返る
+        assert.strictEqual(res.numberMatched, 4);
+        assert.ok(res.features.length > 0);
+      });
+    });
+
+    await test('getHubItemsByQuery should follow startindex and merge all pages', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // numberMatched 6 に対し 1ページ目は 4 件しか返らない。
+        // 残り 2 件は startindex=5 の 2ページ目にあり、そこに目的のデータセットが入っている。
+        // 1ページ目には実APIと同様に rel=next リンクを付け、2ページ目 (最終ページ) には付けない。
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(6, [
+            makeFeature('id-1', '香川県 高松市 町字マスター（フルセット）'),
+            makeFeature('id-2', '香川県 高松市 町字マスター'),
+            makeFeature('id-3', 'ダミー3'),
+            makeFeature('id-4', 'ダミー4'),
+          ], 5));
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(5, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(6, [
+            makeFeature('id-5', '香川県 高松市 地番マスター位置参照拡張'),
+            makeFeature('id-6', '香川県 高松市 地番マスター'),
+          ]));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+
+        assert.strictEqual(res.features.length, 6, '2ページ分が結合されること');
+        assert.strictEqual(res.numberReturned, 6, 'numberReturned が実件数に更新されること');
+        assert.strictEqual(res.numberMatched, 6);
+        assert.strictEqual(hub.mayBeTruncated(res), false, '全件取得できたので切り捨て扱いにならないこと');
+        assert.ok(
+          hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'),
+          '2ページ目にしか無いデータセットが見つかること'
+        );
+        assert.ok(
+          !res.links?.some((link) => link.rel === 'next'),
+          '結合済みの結果には「まだ続きがある」rel=next を残さないこと'
+        );
+        assert.ok(
+          res.links?.some((link) => link.rel === 'self'),
+          'rel=next 以外のリンク (self) は残ること'
+        );
+      });
+    });
+
+    await test('getHubItemsByQuery should not fetch a second page when complete', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // intercept を 1 つだけ登録する (.times() を使わない)。
+        // 2 回目のリクエストが飛べばマッチする intercept が無く、テストは失敗する。
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(2, [
+            makeFeature('id-1', 'ダミー1'),
+            makeFeature('id-2', 'ダミー2'),
+          ]));
+
+        const { result: res, logs } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
+        assert.strictEqual(res.features.length, 2);
+        // 1ページで済むクエリが大半なので、ここでログを出すと 04 の実行が
+        // 1900 行超のノイズで埋まる
+        assert.deepStrictEqual(logs, [], 'ページ追随が不要なら何も出力しないこと');
+      });
+    });
+
+    await test('getHubItemsByQuery should not paginate without numberMatched', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // numberMatched が無いと全体の件数が分からないので、ページを進めようがない。
+        // intercept は 1 つだけ登録し、追加リクエストが飛ばないことを確かめる。
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(undefined, [makeFeature('id-1', 'ダミー1')]));
+
+        const { result: res, warnings } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
+        assert.strictEqual(res.features.length, 1);
+        assert.strictEqual(warnings.length, 1);
+        assert.match(warnings[0], /numberMatched を返しませんでした/);
+      });
+    });
+
+    await test('getHubItemsByQuery should stop when a page returns no features', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // numberMatched は 8 だが 2ページ目が 0 件。進捗しないので打ち切る
+        // (ここで止めないと startindex が同じ値のまま無限にリクエストが飛ぶ)。
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(8, [
+            makeFeature('id-1', 'ダミー1'),
+            makeFeature('id-2', 'ダミー2'),
+          ]));
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(3, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(8, []));
+
+        const { result: res, warnings, logs } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
+        assert.strictEqual(res.features.length, 2);
+        assert.strictEqual(res.numberReturned, 2);
+        assert.strictEqual(warnings.length, 1, '全件取れなかったので警告が1件出ること');
+        // ページ上限ではなく「API が numberMatched より少なく返した」側の打ち切りだと
+        // 分かること。警告文だけでは両者を区別できない
+        assert.strictEqual(logs.length, 1);
+        assert.match(logs[0], /2 ページ取得/);
+        assert.match(logs[0], /最終ページが0件/);
+        assert.doesNotMatch(logs[0], /ページ上限/);
+        // numberMatched (8) 自体は返っているので、「numberMatched が無い」ケースの警告ではなく
+        // 「切り捨てられた」ケースの警告であることを本文で確認する。
+        assert.match(warnings[0], /全件取得できませんでした/);
+        assert.match(warnings[0], /numberMatched: 8/);
+        assert.match(warnings[0], /numberReturned: 2/);
+      });
+    });
+
+    await test('getHubItemsByQuery should not write a cache file when a later page fails', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // 1ページ目は成功し、2ページ目 (startindex=5) が失敗する状況を再現する。
+        // 404 は fetchWithRetry がリトライしない状態コードなので、5xx を使うより速い。
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(6, [
+            makeFeature('id-1', 'ダミー1'),
+            makeFeature('id-2', 'ダミー2'),
+            makeFeature('id-3', 'ダミー3'),
+            makeFeature('id-4', 'ダミー4'),
+          ], 5));
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(5, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(404, 'Not Found');
+
+        const cacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined_limit100.json'
+        );
+
+        // 途中のページで失敗したら呼び出し元にエラーが伝わり、
+        // 収集済みの一部だけの結果がキャッシュに書かれてはならない
+        // (書いてしまうと、次回以降は欠落した結果を完全な結果として読み続けてしまう)。
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          new Error('HUB API returned an error: 404 Not Found')
+        );
+
+        assert.strictEqual(fs.existsSync(cacheFile), false, 'キャッシュファイルが作られていないこと');
+      });
+    });
+
+    await test('getHubItemsByQuery should dedupe overlapping pages without skewing startindex', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // 1ページ目: id-1..id-4 (4件)
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(10, [
+            makeFeature('id-1', 'ダミー1'),
+            makeFeature('id-2', 'ダミー2'),
+            makeFeature('id-3', 'ダミー3'),
+            makeFeature('id-4', 'ダミー4'),
+          ]));
+        // 2ページ目 (startindex=5): id-4 が重複している (3件)
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(5, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(10, [
+            makeFeature('id-4', 'ダミー4'),
+            makeFeature('id-5', 'ダミー5'),
+            makeFeature('id-6', 'ダミー6'),
+          ]));
+        // 3ページ目は startindex=8 (= 生の取得件数 4+3 に 1 を足した値) で来ること。
+        // 重複排除後の件数 6 を使ってしまうと startindex=7 になり、この intercept に
+        // マッチせずテストが落ちる。
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(8, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(10, [
+            makeFeature('id-8', 'ダミー8'),
+            makeFeature('id-9', 'ダミー9'),
+            makeFeature('id-10', 'ダミー10'),
+          ]));
+
+        const { result: res, warnings } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
+
+        // 型注釈は省略できない。HubSearchResultList は GeoJSON.FeatureCollection との
+        // 交差型で、features の要素型も交差になる結果 properties が null を含みうると
+        // 判定される。HubSearchResult と明示すると null 側が潰れて解決する。
+        const ids = res.features.map((f: hub.HubSearchResult) => f.properties.id);
+        assert.strictEqual(ids.length, new Set(ids).size, '重複が排除されていること');
+        assert.deepStrictEqual(
+          ids,
+          ['id-1', 'id-2', 'id-3', 'id-4', 'id-5', 'id-6', 'id-8', 'id-9', 'id-10'],
+          '重複を除いた 9 件が出現順で並ぶこと'
+        );
+        assert.strictEqual(res.numberReturned, 9, 'numberReturned は重複排除後の件数');
+
+        // numberMatched: 10 に対し重複排除後は 9 件だが、サーバ側の 10 件分は歩き切っている。
+        // 件数だけを比べると切り捨てに見えてしまうため、完走した事実で判定する。
+        assert.strictEqual(res.fetchedAllPages, true, '全範囲を歩き切ったことが記録されること');
+        assert.strictEqual(hub.mayBeTruncated(res), false, '重複排除による件数減を切り捨て扱いしないこと');
+        assert.deepStrictEqual(warnings, [], '取りこぼしは無いので警告を出さないこと');
+      });
+    });
+
+    await test('getHubItemsByQuery should stop at the maximum page count', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // numberMatched を過大に返し続ける API を再現する。
+        // 打ち切らないとリクエストが際限なく飛ぶ。
+        let requestCount = 0;
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市'), method: 'GET' })
+          .reply(200, () => {
+            requestCount += 1;
+            return makePage(100000, [makeFeature(`id-${requestCount}`, `ダミー${requestCount}`)]);
+          })
+          .times(hub.MAX_SEARCH_PAGES + 1);
+
+        const { warnings, logs } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
+
+        assert.strictEqual(requestCount, hub.MAX_SEARCH_PAGES, `リクエストが ${hub.MAX_SEARCH_PAGES} 回で止まること`);
+        assert.strictEqual(warnings.length, 1, '警告は1本だけ (打ち切りと切り捨てで二重に出さない)');
+        assert.match(warnings[0], /全件取得できませんでした/);
+        assert.match(warnings[0], new RegExp(`最大 ${hub.MAX_SEARCH_PAGES} ページ`));
+
+        // 警告の原因が「ページ上限で止まった」ことだと分かるログが別途出ること。
+        // 警告を増やさずに切り分けたいので console.log 側で出す。
+        assert.strictEqual(logs.length, 1);
+        assert.match(logs[0], new RegExp(`${hub.MAX_SEARCH_PAGES} ページ取得`));
+        assert.match(logs[0], new RegExp(`ページ上限 ${hub.MAX_SEARCH_PAGES} に到達`));
+      });
+    });
+
+    await test('getHubItemsByQuery should reuse a complete cache without fetching', async () => {
+      await withMockAgent(async () => {
+        // 完全な (切り捨てのない) キャッシュを置く。intercept は登録しない。
+        // withMockAgent は disableNetConnect() 済みなので、フェッチが起きれば必ず失敗する。
+        const cacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined_limit100.json'
+        );
+        fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+        fs.writeFileSync(cacheFile, JSON.stringify({
+          type: 'FeatureCollection',
+          numberMatched: 2,
+          numberReturned: 2,
+          features: [
+            { id: 'id-1', type: 'Feature', geometry: null, properties: { id: 'id-1', title: 'ダミー1' } },
+            { id: 'id-2', type: 'Feature', geometry: null, properties: { id: 'id-2', title: 'ダミー2' } },
+          ],
+        }));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        assert.strictEqual(res.features.length, 2);
+        assert.strictEqual(res.numberMatched, 2);
+      });
+    });
+
+    await test('getHubItemsByQuery should reuse a deduped cache without refetching', async () => {
+      await withMockAgent(async () => {
+        // 重複排除で numberReturned (9) が numberMatched (10) を下回っているが、
+        // 全範囲は歩き切っているキャッシュ。件数だけで判定すると毎回再取得され、
+        // 04 では位置参照拡張の警告が console.error に昇格してしまう。
+        // intercept は登録しないので、再取得が起きればフェッチが失敗してテストが落ちる。
+        const cacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined_limit100.json'
+        );
+        fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+        fs.writeFileSync(cacheFile, JSON.stringify({
+          type: 'FeatureCollection',
+          numberMatched: 10,
+          numberReturned: 9,
+          fetchedAllPages: true,
+          features: [{ id: 'id-1', type: 'Feature', geometry: null, properties: { id: 'id-1', title: 'ダミー1' } }],
+        }));
+
+        const { result: res, warnings } = await withCapturedConsole(
+          () => hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県')
+        );
+
+        assert.strictEqual(res.numberMatched, 10, 'キャッシュがそのまま使われること');
+        assert.deepStrictEqual(warnings, [], '切り捨て警告を出さないこと');
+      });
+    });
+
+    await test('getHubItemsByQuery should refetch a truncated cache', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // ページ追随の導入前に保存された切り捨て済みキャッシュを再現する。
+        // キーが同じなのでヒットするが、そのまま使うと欠落したまま返してしまう。
+        const cacheFile = path.join(
+          process.env.CACHE_DIR!,
+          'hub',
+          'hub_items_by_query_香川県高松市_市区町村レベル_香川県_undefined_limit100.json'
+        );
+        fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+        fs.writeFileSync(cacheFile, JSON.stringify({
+          type: 'FeatureCollection',
+          numberMatched: 3,
+          numberReturned: 1,
+          features: [
+            { id: 'id-1', type: 'Feature', geometry: null, properties: { id: 'id-1', title: 'ダミー1' } },
+          ],
+        }));
+
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathWithStartIndex(undefined, '香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, makePage(3, [
+            makeFeature('id-1', 'ダミー1'),
+            makeFeature('id-2', 'ダミー2'),
+            makeFeature('id-3', 'ダミー3'),
+          ]));
+
+        const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県');
+        assert.strictEqual(res.features.length, 3, '再取得した完全な結果が返ること');
+        assert.strictEqual(hub.mayBeTruncated(res), false);
+
+        // キャッシュファイルも完全な結果で上書きされていること
+        const saved = JSON.parse(fs.readFileSync(cacheFile, 'utf-8')) as hub.HubSearchResultList;
+        assert.strictEqual(saved.features.length, 3);
+        assert.strictEqual(saved.numberReturned, 3);
+      });
     });
 
     await test('getHubItemsByQuery should handle hub handled error', async () => {
-      const mockAgent = new MockAgent();
-      setGlobalDispatcher(mockAgent);
+      await withMockAgent(async (mockAgent) => {
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(
+            404, {
+              message: "Cannot GET /api/search/v1/collections/all/items",
+              error: "Not Found",
+              statusCode: 404
+            }, {
+              headers: { 'content-type': 'application/geo+json' }
+            }
+          );
 
-      const mockPool = mockAgent.get('https://dataset.address-br.digital.go.jp');
-      mockPool.intercept({
-          path: '/api/search/v1/collections/all/items?filter=((group IN (864dfb9be4ef483d864e886fa25e1c94)))%20AND%20((categories%20IN%20(%2Fcategories%2F%E5%B8%82%E5%8C%BA%E7%94%BA%E6%9D%91%E3%83%AC%E3%83%99%E3%83%AB%2F%E9%A6%99%E5%B7%9D%E7%9C%8C)))&limit=12&q=%E9%A6%99%E5%B7%9D%E7%9C%8C%E9%AB%98%E6%9D%BE%E5%B8%82',
-          method: 'GET',
-        }).reply(
-          404, {
-            message: "Cannot GET /api/search/v1/collections/all/items",
-            error: "Not Found",
-            statusCode: 404
-          }, {
-            headers: { 'content-type': 'application/geo+json' }
-          }
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          new Error('HUB API returned an error: {"message":"Cannot GET /api/search/v1/collections/all/items","error":"Not Found","statusCode":404}')
         );
-
-      await assert.rejects(
-        hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
-        new Error('HUB API returned an error: {"message":"Cannot GET /api/search/v1/collections/all/items","error":"Not Found","statusCode":404}')
-      );
-
-      await mockAgent.close();
-      setGlobalDispatcher(new Agent());
+      });
     });
 
     await test('getHubItemsByQuery should handle hub unhandled error', async () => {
-      const mockAgent = new MockAgent();
-      setGlobalDispatcher(mockAgent);
+      await withMockAgent(async (mockAgent) => {
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(404, "Not Found");
 
-      const mockPool = mockAgent.get('https://dataset.address-br.digital.go.jp');
-      mockPool.intercept({
-          path: '/api/search/v1/collections/all/items?filter=((group IN (864dfb9be4ef483d864e886fa25e1c94)))%20AND%20((categories%20IN%20(%2Fcategories%2F%E5%B8%82%E5%8C%BA%E7%94%BA%E6%9D%91%E3%83%AC%E3%83%99%E3%83%AB%2F%E9%A6%99%E5%B7%9D%E7%9C%8C)))&limit=12&q=%E9%A6%99%E5%B7%9D%E7%9C%8C%E9%AB%98%E6%9D%BE%E5%B8%82',
-          method: 'GET',
-        }).reply(
-          404,
-          "Not Found"
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          new Error('HUB API returned an error: 404 Not Found')
         );
+      });
+    });
 
-      await assert.rejects(
-        hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
-        new Error('HUB API returned an error: 404 Not Found')
-      );
+    await test('getHubItemsByQuery should reject a response without a features array', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // features を欠くレスポンス。検査しないと `as HubSearchResultList` をすり抜け、
+        // ページ追随の内部で URL 情報の無い裸の TypeError になる
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, { type: 'FeatureCollection', numberMatched: 1, numberReturned: 1 });
 
-      await mockAgent.close();
-      setGlobalDispatcher(new Agent());
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          (err: Error) => {
+            assert.match(err.message, /features is not an array/);
+            // どのクエリで壊れたか分かるよう URL が含まれること
+            // (URL 中のクエリはパーセントエンコードされている)
+            assert.ok(err.message.includes(encodeURIComponent('香川県高松市')), err.message);
+            return true;
+          }
+        );
+      });
     });
 
     await test('getHubItemsByQuery should handle fetch error when network is disconnected', async () => {
-      const mockAgent = new MockAgent();
-      setGlobalDispatcher(mockAgent);
-      mockAgent.disableNetConnect();
+      await withMockAgent(async () => {
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          new TypeError('fetch failed')
+        );
+      });
+    });
 
-      await assert.rejects(
-        hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
-        new TypeError('fetch failed')
+    await test('getHubItemsByQuery should match the live API [network]', { skip: skipNetworkTests }, async () => {
+      const res = await hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県', 'title');
+      // 実APIでも SEARCH_RESULT_LIMIT が上限以下である限り numberMatched は返る
+      assert.strictEqual(typeof res.numberMatched, 'number');
+      assert.ok(res.numberMatched! > 0);
+      assert.strictEqual(res.features.length, res.numberReturned);
+      assert.ok(res.numberMatched! >= res.numberReturned);
+      assert.ok(hub.findResultByTypeAndArea(res.features, '地番マスター', '香川県 高松市'));
+
+      // numberMatched が limit を超えるクエリでページ追随が働くこと。
+      // 長野県長野市は「長野県」「長野市」がスペース区切りの語として扱われ、
+      // 県内の全市区町村がマッチして件数が膨らむ (2026-08-09 実測で 153 件 = 2ページ)。
+      // クエリ形式は 04_make_chiban.ts が組み立てるものと同じ (`${area} 地番マスター`)。
+      const paged = await hub.getHubItemsByQuery('長野県 長野市 地番マスター', '市区町村レベル', '長野県');
+      assert.ok(paged.numberMatched! > 100, `numberMatched が limit を超えること (実際: ${paged.numberMatched})`);
+      assert.strictEqual(
+        paged.features.length, paged.numberMatched,
+        `全ページが結合されること (numberMatched: ${paged.numberMatched}, `
+        + `上限: ${hub.MAX_SEARCH_PAGES}ページ × 100件 = ${hub.MAX_SEARCH_PAGES * 100}件)`
       );
+      assert.strictEqual(hub.mayBeTruncated(paged), false);
+      assert.ok(hub.findResultByTypeAndArea(paged.features, '地番マスター', '長野県 長野市'));
 
-      await mockAgent.close();
-      setGlobalDispatcher(new Agent());
+      const none = await hub.getHubItemsByQuery('香川県高松市', '全国レベル', '香川県');
+      assert.ok(none.numberMatched === 0);
+    });
+  });
+
+  await test.describe('mayBeTruncated', async () => {
+    const asResultList = (partial: Partial<hub.HubSearchResultList>) =>
+      partial as hub.HubSearchResultList;
+
+    await test('should be false when all matched results are returned', () => {
+      assert.strictEqual(hub.mayBeTruncated(asResultList({ numberMatched: 4, numberReturned: 4 })), false);
+    });
+
+    await test('should be true when the results are truncated', () => {
+      assert.strictEqual(hub.mayBeTruncated(asResultList({ numberMatched: 153, numberReturned: 100 })), true);
+    });
+
+    await test('should be true when numberMatched is missing', () => {
+      // limit が API の上限を超えると numberMatched が返らず判定できないため、
+      // 「切り捨てられていない」と誤認しないよう安全側に倒す
+      assert.strictEqual(hub.mayBeTruncated(asResultList({ numberReturned: 100 })), true);
+    });
+
+    await test('should be true when numberReturned is missing', () => {
+      // numberMatched 欠落と同じく判定材料が無い。比較に任せると
+      // `153 > undefined` が false になり「全件取得できている」と誤認する
+      assert.strictEqual(hub.mayBeTruncated(asResultList({ numberMatched: 153 })), true);
+    });
+
+    await test('should be false when all pages were fetched despite a lower numberReturned', () => {
+      // ページ間の重複を排除すると numberReturned は numberMatched を下回るが、
+      // サーバ側の全範囲は歩き切っているので取りこぼしではない
+      assert.strictEqual(
+        hub.mayBeTruncated(asResultList({ numberMatched: 10, numberReturned: 9, fetchedAllPages: true })),
+        false,
+      );
     });
   });
 
   await test.describe('getHubItemById', async () => {
     await test('getHubItemById should find existing data', async () => {
-      const res = await hub.getHubItemById('45bcb60e4dc747b58def5493ab829825');
-      assert.strictEqual(res.properties.title, '全国 都道府県マスター');
-      assert.strictEqual(res.properties.id, '45bcb60e4dc747b58def5493ab829825');
+      await withMockAgent(async (mockAgent) => {
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: '/api/search/v1/collections/all/items/45bcb60e4dc747b58def5493ab829825', method: 'GET' })
+          .reply(200, readJsonFixture('item_mt_pref_all.json'));
+
+        const res = await hub.getHubItemById('45bcb60e4dc747b58def5493ab829825');
+        assert.strictEqual(res.properties.title, '全国 都道府県マスター');
+        assert.strictEqual(res.properties.id, '45bcb60e4dc747b58def5493ab829825');
+      });
     });
 
     await test('getHubItemById should raise exception for non-existing data', async () => {
+      await withMockAgent(async (mockAgent) => {
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: '/api/search/v1/collections/all/items/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', method: 'GET' })
+          .reply(
+            404, {
+              message: "Cannot find item with recordId xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx in collection All",
+              error: "Not Found",
+              statusCode: 404
+            }, {
+              headers: { 'content-type': 'application/geo+json' }
+            }
+          );
+
+        await assert.rejects(
+          hub.getHubItemById('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'),
+          new Error('HUB API returned an error: {"message":"Cannot find item with recordId xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx in collection All","error":"Not Found","statusCode":404}')
+        );
+      });
+    });
+
+    await test('getHubItemById should reject a response without properties', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // properties を欠くレスポンス。検査しないと CSV 取得やタイトル照合の時点で
+        // URL 情報の無い TypeError になる
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: '/api/search/v1/collections/all/items/45bcb60e4dc747b58def5493ab829825', method: 'GET' })
+          .reply(200, { id: '45bcb60e4dc747b58def5493ab829825', type: 'Feature', geometry: null });
+
+        await assert.rejects(
+          hub.getHubItemById('45bcb60e4dc747b58def5493ab829825'),
+          new Error(
+            'HUB API returned an unexpected item response (properties is missing): '
+            + 'https://dataset.address-br.digital.go.jp/api/search/v1/collections/all/items/45bcb60e4dc747b58def5493ab829825'
+          )
+        );
+      });
+    });
+
+    await test('getHubItemById should match the live API [network]', { skip: skipNetworkTests }, async () => {
+      const res = await hub.getHubItemById('45bcb60e4dc747b58def5493ab829825');
+      assert.strictEqual(res.properties.title, '全国 都道府県マスター');
+      assert.strictEqual(res.properties.id, '45bcb60e4dc747b58def5493ab829825');
+
       await assert.rejects(
         hub.getHubItemById('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'),
         new Error('HUB API returned an error: {"message":"Cannot find item with recordId xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx in collection All","error":"Not Found","statusCode":404}')
@@ -121,34 +692,19 @@ await describe('hub', async () => {
     // ABRデータの配信CDN (data.address-br.digital.go.jp) が日本国外からのアクセスを
     // 403で拒否するため、CI(US基盤のGitHub Actions runner)からは実ネットワークでテストできない。
     // MockAgentでレスポンスを差し替えてオフライン実行可能にする。
-    beforeEach(() => {
-      const targets = [
-        'https://data.address-br.digital.go.jp/mt_town/city/mt_town_city372013.csv.zip',
-        'https://data.address-br.digital.go.jp/mt_town/city/mt_town_cityXXXXXX.csv.zip',
-      ];
-      for (const url of targets) {
-        const cacheFile = path.join(CACHE_FILES_DIR, urlToCacheKey(url));
-        if (fs.existsSync(cacheFile)) {
-          fs.rmSync(cacheFile);
-        }
-      }
-    });
+    // ファイルキャッシュは外側の beforeEach が割り当てる空の一時 CACHE_DIR を使う。
 
     await test('should download, unzip, and parse the CSV file', async () => {
       const fixtureZip = fs.readFileSync(path.join(FIXTURES_DIR, 'mt_town_city372013.csv.zip'));
 
-      const mockAgent = new MockAgent();
-      setGlobalDispatcher(mockAgent);
-      const mockPool = mockAgent.get('https://data.address-br.digital.go.jp');
-      mockPool.intercept({
-        path: '/mt_town/city/mt_town_city372013.csv.zip',
-        method: 'GET',
-      }).reply(200, fixtureZip, {
-        headers: { 'content-type': 'application/octet-stream' },
-      });
+      await withMockAgent(async (mockAgent) => {
+        mockAgent.get(CDN_ORIGIN)
+          .intercept({ path: '/mt_town/city/mt_town_city372013.csv.zip', method: 'GET' })
+          .reply(200, fixtureZip, {
+            headers: { 'content-type': 'application/octet-stream' },
+          });
 
-      try {
-        const res = hub.downloadAndExtract<Record<string, string>>('https://data.address-br.digital.go.jp/mt_town/city/mt_town_city372013.csv.zip');
+        const res = hub.downloadAndExtract<Record<string, string>>(`${CDN_ORIGIN}/mt_town/city/mt_town_city372013.csv.zip`);
         let count = 0;
         for await (const row of res) {
           count += 1;
@@ -158,31 +714,21 @@ await describe('hub', async () => {
           assert.strictEqual(row['city'], '高松市');
         }
         assert.ok(count > 0);
-      } finally {
-        await mockAgent.close();
-        setGlobalDispatcher(new Agent());
-      }
+      });
     });
 
     await test('should raise exception for non-existing data download', async () => {
-      const mockAgent = new MockAgent();
-      setGlobalDispatcher(mockAgent);
-      const mockPool = mockAgent.get('https://data.address-br.digital.go.jp');
-      mockPool.intercept({
-        path: '/mt_town/city/mt_town_cityXXXXXX.csv.zip',
-        method: 'GET',
-      }).reply(404, 'Not Found');
+      await withMockAgent(async (mockAgent) => {
+        mockAgent.get(CDN_ORIGIN)
+          .intercept({ path: '/mt_town/city/mt_town_cityXXXXXX.csv.zip', method: 'GET' })
+          .reply(404, 'Not Found');
 
-      try {
-        const res = hub.downloadAndExtract<Record<string, string>>('https://data.address-br.digital.go.jp/mt_town/city/mt_town_cityXXXXXX.csv.zip');
+        const res = hub.downloadAndExtract<Record<string, string>>(`${CDN_ORIGIN}/mt_town/city/mt_town_cityXXXXXX.csv.zip`);
         await assert.rejects(
           res.next(),
           new Error('HTTP 404: Not Found')
         );
-      } finally {
-        await mockAgent.close();
-        setGlobalDispatcher(new Agent());
-      }
+      });
     });
   });
 });
