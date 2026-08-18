@@ -68,6 +68,17 @@ const SPECS: FixtureSpec[] = [
   },
 ];
 
+// zipエントリ名に `../` が含まれると、展開先が workDir の外へ解決されてしまう。
+// 書き込み前に workDir 配下であることを検証する。
+function resolveInsideWorkDir(workDir: string, entryPath: string): string {
+  const resolved = path.resolve(workDir, entryPath);
+  const relative = path.relative(workDir, resolved);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Unsafe zip entry path: ${entryPath}`);
+  }
+  return resolved;
+}
+
 async function filterZipByLgCode(srcPath: string, destPath: string, lgCodes: string[]): Promise<void> {
   const settings = parseSettings({ lgCodes });
   const srcBuffer = fs.readFileSync(srcPath);
@@ -80,7 +91,7 @@ async function filterZipByLgCode(srcPath: string, destPath: string, lgCodes: str
       const header = rows[0];
       const filtered = [header, ...rows.slice(1).filter((row) => lgCodeMatch(settings, row[0]))];
       const outCsv = filtered.map((row) => row.join(',')).join('\n') + '\n';
-      fs.writeFileSync(path.join(workDir, entry.path), outCsv);
+      fs.writeFileSync(resolveInsideWorkDir(workDir, entry.path), outCsv);
       innerPath = entry.path;
       break; // 最初のCSVのみ処理(ABR配信zipは1ファイル前提)
     }
@@ -90,7 +101,10 @@ async function filterZipByLgCode(srcPath: string, destPath: string, lgCodes: str
     // zip CLI は出力パスに .zip 拡張子が無いと勝手に付与するため、
     // 一時パスに .zip 付きで作成してから destPath にリネームする。
     const tmpZipPath = path.join(workDir, '_out.zip');
-    const result = spawnSync('zip', ['-q', tmpZipPath, innerPath], { cwd: workDir });
+    // Info-ZIP は `--` をオプション終端として扱わないため、`-` で始まるファイル名は
+    // オプションと解釈されてしまう。`./` を付けて回避する。
+    const zipArg = innerPath.startsWith('-') ? `./${innerPath}` : innerPath;
+    const result = spawnSync('zip', ['-q', tmpZipPath, zipArg], { cwd: workDir });
     if (result.status !== 0) {
       throw new Error(`zip command failed (status=${result.status}): ${result.stderr?.toString()}`);
     }
