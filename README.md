@@ -87,11 +87,15 @@ $ npm run run:all # APIを全て生成する
 # オプション
 $ npm run run:01_make_prefecture_city # 都道府県・市区町村のみ作成
 $ npm run run:02_make_machi_aza # 町字API作成
-$ npm run run:03_make_rsdt # 住居表示住所API作成 (町字APIを先に作らないとエラーになります)
-$ npm run run:04_make_chiban # 地番住所API作成 (町字APIを先に作らないとエラーになります)
-$ npm run run:10_refresh_csv_ranges # 町字APIのCSVレンジを更新 (町字APIを先に作らないとエラーになります)
+$ npm run run:03_make_rsdt # 住居表示住所API作成
+$ npm run run:04_make_chiban # 地番住所API作成
+$ npm run run:10_refresh_csv_ranges # 町字APIのCSVレンジを更新 (01〜04 を先に実行しておく必要があります)
 $ npm run run:99_create_stats # 統計情報を作成
 ```
+
+`run:01` 〜 `run:04` はそれぞれ独立して実行できます。町字マスターはアドレス・ベース・レジストリから直接取得するため、`run:03_make_rsdt` と `run:04_make_chiban` に `run:02_make_machi_aza` の出力は必要ありません。
+
+一方 `run:10_refresh_csv_ranges` は、`run:01` が生成する `ja.json`、`run:02` が生成する `{市区町村}.json`、`run:03` と `run:04` が生成する `.txt` ファイルをすべて参照します。`.txt` ファイルが無い市区町村はエラーにせずスキップされるため、先行ステップを実行していないと CSV レンジが更新されないまま処理が完了します。
 
 ### APIビルド設定
 
@@ -153,7 +157,7 @@ prc_num1,prc_num2,prc_num3,lng,lat
 
 ヘッダーは5万バイトの倍数となります。末尾に `=END=` を挿入し、残りを `0x20` (半角スペース)で埋めます。クライアントは `=END=` を確認できるまで、5万バイトずつ読み込むことをおすすめします。
 
-また、 `api/ja/{都道府県名}/{市区町村名}.json` の町字エンドポイントにも、 `csv_ranges` にヘッダーの start / length 情報が入っていますので、町字エンドポイントを既に読み込まれている場合はそのまま利用することをおすすめしております。
+また、 `api/ja/{都道府県名}/{市区町村名}.json` の町字エンドポイントにも、町字ごとの `csv_ranges` として同じ情報が入っています。`start` はその町字の住所・位置情報データが始まるバイト位置、 `length` はそのデータのバイト長です (ヘッダー自体の範囲ではありません)。町字エンドポイントを既に読み込まれている場合は、ヘッダーを読まずにこちらをそのまま利用することをおすすめしております。
 
 ## 出典
 
