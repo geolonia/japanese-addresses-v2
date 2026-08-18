@@ -147,8 +147,10 @@ async function main(argv: string[]) {
       // 検索結果が切り捨てられている場合、データセットは存在するのに枠外へ落ちている
       // 可能性がある。「見つからない」というログだけでは「元々存在しない」と読めてしまい
       // データ欠落に気づけないため、地番マスター・位置参照拡張のどちらが欠けた場合も明示する。
+      // 文言は hub.ts の warnIfTruncated と揃える。片方だけ言い回しが違うと、
+      // ログを grep したときに同じ事象の片側しか見つからない。
       const truncationNote = mayBeTruncated(results)
-        ? `検索結果が切り捨てられている可能性があります `
+        ? `HUB API の検索結果を全件取得できませんでした `
           + `(numberMatched: ${results.numberMatched ?? '不明'}, numberReturned: ${results.numberReturned})。`
           + `データセットが存在するのに取得できていない可能性があります。`
         : undefined;
@@ -166,7 +168,7 @@ async function main(argv: string[]) {
       if (!chibanPosDataRef) {
         if (truncationNote) {
           console.error(
-            `「${area} 地番マスター位置参照拡張」が検索結果に見つかりませんでしたが、${truncationNote}`
+            `「${area} 地番マスター位置参照拡張」が検索結果に見つかりませんでした。${truncationNote}`
           );
         } else {
           // 位置参照拡張が配信されていない市区町村もあるため、座標なしで続行する
