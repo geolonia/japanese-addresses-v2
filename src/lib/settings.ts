@@ -19,6 +19,10 @@ type Settings = {
    *
    * 例: ["011002", "012025"] は、北海道札幌市と北海道函館市のデータのみ出力されます。
    * 例: ["^01"] は、北海道の全ての自治体のデータのみ出力されます。
+   *
+   * 複数の自治体を指定する場合は、["011002", "012025"] のように配列の要素を分けることを
+   * 推奨します。["011002|012025"] のように1つの正規表現にまとめても動作しますが、
+   * 意図が読み取りにくくなります。
    */
   lgCodes?: string[];
 }
@@ -69,6 +73,27 @@ export async function loadSettings(): Promise<ParsedSettings> {
   return settings;
 }
 
+/**
+ * 正規表現の全ての選択肢から、市区町村コードの先頭2桁(都道府県コード)を取り出します。
+ * 選択(|)を分割せずに先頭だけを見ると、["452092|131059"] のような指定で
+ * 2つ目以降の都道府県が判定から漏れてしまいます。
+ *
+ * 例: "452092|131059" -> ["45", "13"] / "^01" -> [] (市区町村まで指定されていない)
+ *
+ * これは正規表現を解析せずに `|` で分割する近似判定です。エスケープされた `\|` や
+ * 文字クラス内の `[|]` は選択として扱われるため、都道府県コードを過剰に抽出します。
+ * その場合に起きるのは「マッチしない都道府県を処理して出力0件になる」だけで
+ * 誤ったデータは出力されません。lgCodes は数字のパターンを想定しているため、
+ * 完全な正規表現パーサは持たない方針です。
+ */
+function prefCodesFromPattern(source: string): string[] {
+  return source
+    .split('|')
+    .map((alternative) => /^\D*(\d{2})\d{3}/.exec(alternative))
+    .filter((matched): matched is RegExpExecArray => matched !== null)
+    .map((matched) => matched[1]);
+}
+
 export function lgCodeMatch(settings: ParsedSettings, lgCode: string): boolean {
   if (settings.lgCodes.length === 0) {
     return true;
@@ -79,9 +104,7 @@ export function lgCodeMatch(settings: ParsedSettings, lgCode: string): boolean {
     }
 
     // re が市区町村まで指定されている場合は、都道府県全体に対してマッチする
-    const cityCodeMatch = re.source.match(/^\^?(\d{2})\d{3}/);
-    if (cityCodeMatch) {
-      const prefCode = cityCodeMatch[1];
+    for (const prefCode of prefCodesFromPattern(re.source)) {
       if (lgCode.startsWith(prefCode + '000')) {
         return true;
       }

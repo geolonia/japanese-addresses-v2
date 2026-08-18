@@ -49,6 +49,31 @@ await describe('lgCodeMatch', async () => {
     assert.ok(!settings.lgCodeMatch(settingsData, '011002'));
     assert.ok(!settings.lgCodeMatch(settingsData, '460001'));
   });
+
+  // 02_make_machi_aza は都道府県コード (${prefCode}000) で処理をスキップするため、
+  // 選択(|)の2つ目以降が判定から漏れると、その都道府県が丸ごと出力されなくなる。
+  await test('1つの正規表現に選択(|)で複数指定しても、それぞれの都道府県全体にマッチする', () => {
+    const settingsData = settings.parseSettings({
+      lgCodes: ['452092|131059'],
+    });
+    assert.ok(settings.lgCodeMatch(settingsData, '452092'));
+    assert.ok(settings.lgCodeMatch(settingsData, '450000'));
+
+    assert.ok(settings.lgCodeMatch(settingsData, '131059'));
+    assert.ok(settings.lgCodeMatch(settingsData, '130000'));
+
+    assert.ok(!settings.lgCodeMatch(settingsData, '011002'));
+    assert.ok(!settings.lgCodeMatch(settingsData, '010000'));
+  });
+
+  await test('選択(|)がグループで囲まれていても、それぞれの都道府県全体にマッチする', () => {
+    const settingsData = settings.parseSettings({
+      lgCodes: ['(452092|131059)'],
+    });
+    assert.ok(settings.lgCodeMatch(settingsData, '450000'));
+    assert.ok(settings.lgCodeMatch(settingsData, '130000'));
+    assert.ok(!settings.lgCodeMatch(settingsData, '010000'));
+  });
 });
 
 await test('loadSettings with overwritten JSON', async () => {
