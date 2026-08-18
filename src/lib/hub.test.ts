@@ -567,7 +567,7 @@ await describe('hub', async () => {
         await assert.rejects(
           hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
           (err: Error) => {
-            assert.match(err.message, /features\[0\]\.properties\.id is not a string/);
+            assert.match(err.message, /features\[0\]\.properties\.id is not a non-empty string/);
             // どのクエリで壊れたか分かるよう URL が含まれること
             assert.ok(err.message.includes(encodeURIComponent('香川県高松市')), err.message);
             return true;
@@ -593,7 +593,32 @@ await describe('hub', async () => {
         await assert.rejects(
           hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
           (err: Error) => {
-            assert.match(err.message, /features\[0\]\.properties\.id is not a string/);
+            assert.match(err.message, /features\[0\]\.properties\.id is not a non-empty string/);
+            return true;
+          }
+        );
+      });
+    });
+
+    await test('getHubItemsByQuery should reject features whose id is blank', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // 空文字・空白のみの id は型としては string を満たすが、undefined と同じく
+        // 区別不能なため重複排除で1件に潰れる。しかも fetchedAllPages は重複排除前の
+        // 取得件数で立つので、mayBeTruncated では検知できず静かに欠落する
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, {
+            type: 'FeatureCollection', numberMatched: 2, numberReturned: 2,
+            features: [
+              { type: 'Feature', geometry: null, properties: { id: '' } },
+              { type: 'Feature', geometry: null, properties: { id: '   ' } },
+            ],
+          });
+
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          (err: Error) => {
+            assert.match(err.message, /features\[0\]\.properties\.id is not a non-empty string/);
             return true;
           }
         );

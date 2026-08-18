@@ -206,10 +206,15 @@ async function fetchSearchPage(url: string): Promise<HubSearchResultList> {
   // TypeError が飛ぶ。また id が undefined の feature が複数あると、それらが同一 id と
   // みなされて1件に潰れ、件数だけが静かに減る。
   for (const [index, feature] of json.features.entries()) {
-    if (typeof feature?.properties?.id !== 'string') {
+    // GeoJSON.Feature の properties が any なので、そのまま束縛すると any が伝播する。
+    // unknown で受けて typeof の絞り込みで string を確定させる。
+    const id: unknown = feature?.properties?.id;
+    // 空文字・空白のみも弾く。型が string でも中身が区別不能なら undefined と同じ結果に
+    // なるため、片方だけ塞いでも検査にならない。
+    if (typeof id !== 'string' || id.trim().length === 0) {
       throw new Error(
         `HUB API returned an unexpected search response `
-        + `(features[${index}].properties.id is not a string): ${url}`
+        + `(features[${index}].properties.id is not a non-empty string): ${url}`
       );
     }
   }
