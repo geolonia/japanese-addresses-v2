@@ -201,6 +201,18 @@ async function fetchSearchPage(url: string): Promise<HubSearchResultList> {
   if (!Array.isArray(json.features)) {
     throw new Error(`HUB API returned an unexpected search response (features is not an array): ${url}`);
   }
+  // features の要素も同じ粒度で検査する。fetchAllSearchPages は properties.id で重複排除
+  // するため、properties を欠く feature が1件でも混ざるとページ追随の内部から裸の
+  // TypeError が飛ぶ。また id が undefined の feature が複数あると、それらが同一 id と
+  // みなされて1件に潰れ、件数だけが静かに減る。
+  for (const [index, feature] of json.features.entries()) {
+    if (typeof feature?.properties?.id !== 'string') {
+      throw new Error(
+        `HUB API returned an unexpected search response `
+        + `(features[${index}].properties.id is not a string): ${url}`
+      );
+    }
+  }
   return json;
 }
 

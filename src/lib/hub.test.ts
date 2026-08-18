@@ -553,6 +553,53 @@ await describe('hub', async () => {
       });
     });
 
+    await test('getHubItemsByQuery should reject a feature without properties', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // properties を欠く feature。検査しないと重複排除の
+        // `seenIds.has(feature.properties.id)` が URL 情報の無い裸の TypeError になる
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, {
+            type: 'FeatureCollection', numberMatched: 1, numberReturned: 1,
+            features: [{ type: 'Feature', geometry: null }],
+          });
+
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          (err: Error) => {
+            assert.match(err.message, /features\[0\]\.properties\.id is not a string/);
+            // どのクエリで壊れたか分かるよう URL が含まれること
+            assert.ok(err.message.includes(encodeURIComponent('香川県高松市')), err.message);
+            return true;
+          }
+        );
+      });
+    });
+
+    await test('getHubItemsByQuery should reject features whose id is missing instead of collapsing them', async () => {
+      await withMockAgent(async (mockAgent) => {
+        // id を欠く feature が複数あると、検査しない場合はいずれも undefined として
+        // 同一 id とみなされ、重複排除で1件に潰れて件数だけが静かに減る
+        mockAgent.get(HUB_ORIGIN)
+          .intercept({ path: pathContaining('香川県高松市', '市区町村レベル', '香川県'), method: 'GET' })
+          .reply(200, {
+            type: 'FeatureCollection', numberMatched: 2, numberReturned: 2,
+            features: [
+              { type: 'Feature', geometry: null, properties: { title: 'a' } },
+              { type: 'Feature', geometry: null, properties: { title: 'b' } },
+            ],
+          });
+
+        await assert.rejects(
+          hub.getHubItemsByQuery('香川県高松市', '市区町村レベル', '香川県'),
+          (err: Error) => {
+            assert.match(err.message, /features\[0\]\.properties\.id is not a string/);
+            return true;
+          }
+        );
+      });
+    });
+
     await test('getHubItemsByQuery should handle fetch error when network is disconnected', async () => {
       await withMockAgent(async () => {
         await assert.rejects(
