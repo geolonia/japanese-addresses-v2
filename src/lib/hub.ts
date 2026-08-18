@@ -18,16 +18,20 @@ const HUB_GROUP_ID = '864dfb9be4ef483d864e886fa25e1c94';
 // 切り捨ての検知ができなくなる (実測で確認)。
 // 定義: https://dataset.address-br.digital.go.jp/api/search/definition/
 const HUB_MAX_LIMIT = 100;
-// 1クエリあたりの取得件数上限。
+// 1ページあたりの希望取得件数。
 //
 // 検索クエリはスペース区切りの語として扱われるため、都道府県名と同名の市
 // (長野県長野市など) では県内の全市区町村がマッチして件数が膨らむ。
-// この上限を超える分は startindex のページ追随 (fetchAllSearchPages) で取得する。
+// これを超える分は startindex のページ追随 (fetchAllSearchPages) で取得するので、
+// 「1クエリで取り切る件数」ではなく「1往復でまとめて取る件数」を決める値。
+const SEARCH_PAGE_SIZE = 100;
+// 実際に limit として送る値。希望値 (SEARCH_PAGE_SIZE) を API の上限 (HUB_MAX_LIMIT) で
+// 頭打ちにする。現時点では両者が同値だが、決めている事柄が違うので定数を分けてある。
 //
 // 「HUB_MAX_LIMIT 以下にすること」という約束はコメントではなく Math.min で担保する。
 // 超過すると numberMatched が消えて切り捨ての検知が効かなくなるため、
-// 将来この値を引き上げても API の上限で頭打ちになるようにしておく。
-const SEARCH_RESULT_LIMIT = Math.min(100, HUB_MAX_LIMIT);
+// 将来 SEARCH_PAGE_SIZE を引き上げても API の上限で頭打ちになるようにしておく。
+const SEARCH_RESULT_LIMIT = Math.min(SEARCH_PAGE_SIZE, HUB_MAX_LIMIT);
 
 // 1クエリで辿る最大ページ数。API 側の異常で numberMatched が過大に返り続けた場合の
 // 暴走防止。10ページ = 1000件で、実測の最大は153件 (長野県長野市, 2026-08-09)。
