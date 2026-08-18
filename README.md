@@ -157,7 +157,9 @@ prc_num1,prc_num2,prc_num3,lng,lat
 
 ## 出典
 
-本データは、「アドレス・ベース・レジストリ」（デジタル庁）(https://dataset.address-br.digital.go.jp) をもとに株式会社 Geolonia が作成したものです。
+本データは、「[アドレス・ベース・レジストリ](https://dataset.address-br.digital.go.jp)」（デジタル庁）をもとに株式会社 Geolonia が作成したものです。
+
+上記のデータを元に、毎月 Geolonia にて更新作業を行っています。
 
 ## 貢献方法
 
