@@ -93,8 +93,10 @@ await describe('abr_data/index', async () => {
           ]);
         });
 
-        // 複合キーは _createKey が '|' 連結する。区切り文字を含む値で
-        // 別キー同士が衝突しないことを確認する。
+        // 複合キーは _createKey が '|' 連結する。先頭の lg_code だけが一致する行
+        // (011002|0001 と 012025|0001 など) が誤って結合されないことを確認する。
+        // なお値そのものに '|' が含まれるとキーが衝突し得るが、呼び出し元が渡すのは
+        // ABR の数字コード項目のみなので現れない (_createKey のコメント参照)。
         await test('it joins on composite keys', async () => {
           const one = async function *() {
             await Promise.resolve();

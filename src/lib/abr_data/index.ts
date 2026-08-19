@@ -4,6 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 
+// 結合キーを '|' 連結した文字列にする。値そのものに '|' が含まれると
+// ('a|b', 'c') と ('a', 'b|c') が同じキーになってしまうが、呼び出し元が渡すのは
+// lg_code / machiaza_id / prc_id / blk_id / rsdt_id / rsdt2_id といった
+// ABR の数字コード項目のみなので '|' は現れない。
+// キー項目に自由記述の文字列を追加する場合は曖昧さのない符号化に変えること。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function _createKey(data: any, keys: string[]): string {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
