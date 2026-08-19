@@ -2,9 +2,30 @@ import assert from 'node:assert';
 import test from 'node:test';
 
 import fs from 'node:fs/promises';
-import main from './04_make_chiban.js';
+import main, { resolveConcurrency } from './04_make_chiban.js';
 import { getRangesFromCSV } from './10_refresh_csv_ranges.js';
 import { setupFixtureCache } from '../test_helpers/fixture_cache.js';
+
+// CHIBAN_CONCURRENCY は同時実行数の上限になる。不正値がそのまま使われると
+// 上限チェックが機能しなくなるため、既定値に落とすことを保証する。
+await test.describe('resolveConcurrency', async () => {
+  await test('it uses a valid positive integer as-is', () => {
+    assert.equal(resolveConcurrency('1'), 1);
+    assert.equal(resolveConcurrency('8'), 8);
+  });
+
+  await test('it falls back to the default for unset, empty, or non-numeric values', () => {
+    assert.equal(resolveConcurrency(undefined), 4);
+    // 空文字列は ?? では拾われないため parseInt('') = NaN になる経路。
+    assert.equal(resolveConcurrency(''), 4);
+    assert.equal(resolveConcurrency('abc'), 4);
+  });
+
+  await test('it falls back to the default for zero and negative values', () => {
+    assert.equal(resolveConcurrency('0'), 4);
+    assert.equal(resolveConcurrency('-2'), 4);
+  });
+});
 
 await test.describe('with filter for 465054 (鹿児島県熊毛郡屋久島町)', async () => {
   test.before(() => {
