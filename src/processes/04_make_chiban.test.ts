@@ -14,6 +14,10 @@ await test.describe('resolveConcurrency', async () => {
     assert.equal(resolveConcurrency('8'), 8);
   });
 
+  await test('it tolerates surrounding whitespace', () => {
+    assert.equal(resolveConcurrency(' 8 '), 8);
+  });
+
   await test('it falls back to the default for unset, empty, or non-numeric values', () => {
     assert.equal(resolveConcurrency(undefined), 4);
     // 空文字列は ?? では拾われないため parseInt('') = NaN になる経路。
@@ -24,6 +28,15 @@ await test.describe('resolveConcurrency', async () => {
   await test('it falls back to the default for zero and negative values', () => {
     assert.equal(resolveConcurrency('0'), 4);
     assert.equal(resolveConcurrency('-2'), 4);
+  });
+
+  // parseInt は末尾の不正文字を切り捨てるため、これらを弾かないと
+  // '1000workers' で同時実行数 1000 が通ってしまう。
+  await test('it rejects values that are only partially numeric', () => {
+    assert.equal(resolveConcurrency('1000workers'), 4);
+    assert.equal(resolveConcurrency('1.5'), 4);
+    assert.equal(resolveConcurrency('0x10'), 4);
+    assert.equal(resolveConcurrency('4 8'), 4);
   });
 });
 

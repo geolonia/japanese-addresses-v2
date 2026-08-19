@@ -16,13 +16,18 @@ import { mergeDataLeftJoin } from '../lib/abr_data/index.js';
 const HEADER_CHUNK_SIZE = 50_000;
 const DEFAULT_CONCURRENCY = 4;
 
-// parseInt は不正値や空文字列に対して NaN を返す。NaN をそのまま使うと main 内の
-// `executing.size >= CONCURRENCY` が常に false になり同時実行数の上限が消えて、
-// 全市区町村の processCity が一斉に走ってしまう (8GB ヒープでも足りない)。
-// 0 や負値は逆に毎回待機して直列化するため、いずれも既定値に落とす。
+// 不正値をそのまま使うと main 内の `executing.size >= CONCURRENCY` が常に false になり
+// 同時実行数の上限が消えて、全市区町村の processCity が一斉に走ってしまう
+// (8GB ヒープでも足りない)。0 や負値は逆に毎回待機して直列化する。
+// parseInt は末尾の不正文字を切り捨てるため ('1000workers' → 1000、'1.5' → 1)、
+// 全体が正の整数であることを正規表現で確かめてから Number で変換する。
 export function resolveConcurrency(raw: string | undefined): number {
-  const parsed = parseInt(raw ?? '', 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_CONCURRENCY;
+  const trimmed = raw?.trim() ?? '';
+  if (!/^\d+$/.test(trimmed)) {
+    return DEFAULT_CONCURRENCY;
+  }
+  const parsed = Number(trimmed);
+  return parsed > 0 ? parsed : DEFAULT_CONCURRENCY;
 }
 
 const CONCURRENCY = resolveConcurrency(process.env.CHIBAN_CONCURRENCY);
