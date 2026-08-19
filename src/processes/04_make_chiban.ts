@@ -21,13 +21,15 @@ const DEFAULT_CONCURRENCY = 4;
 // (8GB ヒープでも足りない)。0 や負値は逆に毎回待機して直列化する。
 // parseInt は末尾の不正文字を切り捨てるため ('1000workers' → 1000、'1.5' → 1)、
 // 全体が正の整数であることを正規表現で確かめてから Number で変換する。
+// 桁数が多すぎる入力は Number が Infinity を返し (`'9'.repeat(400)` など)、
+// `Infinity > 0` は真なので上限消滅と同じ結果になる。isSafeInteger で弾く。
 export function resolveConcurrency(raw: string | undefined): number {
   const trimmed = raw?.trim() ?? '';
   if (!/^\d+$/.test(trimmed)) {
     return DEFAULT_CONCURRENCY;
   }
   const parsed = Number(trimmed);
-  return parsed > 0 ? parsed : DEFAULT_CONCURRENCY;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_CONCURRENCY;
 }
 
 const CONCURRENCY = resolveConcurrency(process.env.CHIBAN_CONCURRENCY);

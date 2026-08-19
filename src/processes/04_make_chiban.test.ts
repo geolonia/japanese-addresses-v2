@@ -38,6 +38,16 @@ await test.describe('resolveConcurrency', async () => {
     assert.equal(resolveConcurrency('0x10'), 4);
     assert.equal(resolveConcurrency('4 8'), 4);
   });
+
+  // 桁数が多すぎる入力は Number が Infinity を返す。`Infinity > 0` は真なので
+  // 弾かないと `executing.size >= CONCURRENCY` が常に false になり上限が消える。
+  await test('it rejects values too large to be a safe integer', () => {
+    assert.equal(resolveConcurrency('9'.repeat(400)), 4);
+    // 2^53 (Number.MAX_SAFE_INTEGER + 1)
+    assert.equal(resolveConcurrency('9007199254740992'), 4);
+    // 2^53 - 1 は安全な整数なので、そのまま通る境界値
+    assert.equal(resolveConcurrency('9007199254740991'), 9007199254740991);
+  });
 });
 
 await test.describe('with filter for 465054 (鹿児島県熊毛郡屋久島町)', async () => {
