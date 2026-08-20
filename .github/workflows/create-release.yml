@@ -1,26 +1,53 @@
 name: Auto Release
 
-permissions:
-  contents: write
 on:
   push:
     tags:
       - 'v*.*.*'
 
+# 既定は読み取りのみ。書き込みが必要なジョブでだけ個別に宣言する
+permissions:
+  contents: read
+
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+
+    outputs:
+      prerelease: ${{ steps.meta.outputs.prerelease }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          # このジョブは git 認証を使わないため、認証情報をワークツリーに残さない
+          persist-credentials: false
+
+      # 公開されるバージョンは package.json 由来、dist-tag の判定はタグ名由来のため、
+      # 両者がずれていると意図しない dist-tag で公開される。
+      # npm ci より前に置いて、ミスタグのときは数秒で落とす。
+      # setup-node より前だが、ランナーには Node が同梱されているため node -p は動く。
+      - name: タグを検証して公開メタデータを決める
+        id: meta
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::タグ $TAG が package.json の version $PKG と一致しません"
+            exit 1
+          fi
+          # ${TAG%%+*} でビルドメタデータを落とす。その中のハイフンは prerelease ではない。
+          case "${TAG%%+*}" in
+            *-*) PRERELEASE=true ;;
+            *)   PRERELEASE=false ;;
+          esac
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG prerelease=$PRERELEASE"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
-          scope: '@geolonia'
           cache: 'npm'
 
       - name: Install dependencies
@@ -29,14 +56,107 @@ jobs:
       - name: Build
         run: npm run build
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist
+
+  release:
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      # ファイルを添付しないため checkout は不要（tag_name から API で Release を作る）
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
+          prerelease: ${{ needs.build.outputs.prerelease }}
 
-      - name: Publish to npm
-        run: npm publish --access=public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  publish:
+    needs: build
+
+    runs-on: ubuntu-latest
+
+    # id-token: write は npm の Trusted Publishing (OIDC) に必要
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          # Node.js 24.x が同梱する npm は、OIDC 公開に必要な 11.5.1 以降を満たす。
+          # 22.x 同梱の npm (10.9.x) は満たさないため、このジョブに限り 24.x を使う。
+          # setup-node は v7 でダミーの NODE_AUTH_TOKEN を export しなくなった。
+          # これが OIDC 公開の前提なので、v6 以下に戻さないこと。
+          node-version: 24.x
+          # 既定ではランナーのツールキャッシュにある 24.x が優先され、同梱される npm の
+          # バージョンがキャッシュの内容に左右される。要件を満たす版を確実に取るため最新を取る
+          check-latest: true
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@geolonia'
+          # このジョブは npm ci をしないためキャッシュ不要。公開ジョブでのキャッシュ汚染も避ける
+          package-manager-cache: false
+
+      # npm 11.5.1 未満では OIDC 公開ができない。NODE_AUTH_TOKEN も渡していないため、
+      # そのまま進むと原因の分かりにくい認証エラーになる。理由が分かる形で先に落とす。
+      - name: npm が OIDC 公開の要件を満たすか確認する
+        run: |
+          NPM_VERSION="$(npm --version)"
+          REQUIRED=11.5.1
+          # 文字列比較では 11.16.0 < 11.5.1 と誤判定するため sort -V で比較する
+          if [ "$(printf '%s\n%s\n' "$REQUIRED" "$NPM_VERSION" | sort -V | head -n1)" != "$REQUIRED" ]; then
+            echo "::error::npm $NPM_VERSION は OIDC 公開に必要な $REQUIRED 未満です"
+            exit 1
+          fi
+          echo "npm $NPM_VERSION (>= $REQUIRED)"
+
+      # npm publish は package.json を必要とするため checkout する
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # dist は build ジョブの成果物をそのまま使い、このジョブでは npm ci をしない。
+      # このジョブは id-token: write を持つため ACTIONS_ID_TOKEN_REQUEST_* が全ステップに
+      # 露出しており、ここで依存をインストールすると better-sqlite3 / esbuild / fsevents の
+      # install スクリプトが「Trusted Publisher として公開できる環境」で走ってしまう。
+      # 侵害された依存の postinstall にその力を渡さないため、依存のコードを一切実行しない。
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+
+      # package.json の prepack (clean && build) は下の --ignore-scripts で飛ばすため、
+      # dist の中身は誰も保証しない。空パッケージを公開しないよう明示的に確認する。
+      - name: dist の中身を確認する
+        run: |
+          for f in dist/cjs/data.cjs dist/esm/data.mjs dist/esm/data.d.ts; do
+            if [ ! -s "$f" ]; then
+              echo "::error::$f が存在しないか空です"
+              exit 1
+            fi
+          done
+          ls -l dist/cjs dist/esm
+
+      # --ignore-scripts で prepack を飛ばす。prepack は npm run clean && npm run build を
+      # 呼ぶが、このジョブには node_modules が無いため tsc が見つからず失敗する。
+      # 手元の npm pack が古い dist を同梱しないよう prepack 自体は残している。
+      # --provenance は明示的に付ける。npm の自動有効化は前提を満たさないとき
+      # エラーではなく黙って provenance なしで公開するため、意図しない無効化を防ぐ。
+      - name: 公開 (latest)
+        if: needs.build.outputs.prerelease == 'false'
+        run: npm publish --access=public --provenance --ignore-scripts
+
+      # prerelease は next dist-tag に公開し、npm install の既定や ^/~ の範囲に入れない
+      - name: 公開 (next)
+        if: needs.build.outputs.prerelease == 'true'
+        run: npm publish --access=public --provenance --ignore-scripts --tag=next
