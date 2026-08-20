@@ -202,6 +202,42 @@ async function processCity(
   ), apiData);
 }
 
+// items を最大 concurrency 個まで並行して worker に流す。
+// worker が reject したら、実行中の worker を待ってから最初の例外を投げ直す。
+// ここで待たずに抜けると、呼び出し元 (src/04_make_chiban.ts) の process.exit(1) が
+// 書き込み中の -地番.txt を切り捨て、ヘッダーだけが揃った壊れたファイルが残る。
+// その状態で 10_refresh_csv_ranges を通すと実体の無い領域を指す csv_ranges ができる。
+// 失敗以降の市区町村を起動しない (= 中断する) 方針は変えない。全国分が欠けたまま
+// 完走するほうが気付きにくいため。
+export async function runWithConcurrency<T>(
+  items: Iterable<T>,
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+  onSettled?: () => void,
+): Promise<void> {
+  const executing = new Set<Promise<void>>();
+  try {
+    for (const item of items) {
+      const p: Promise<void> = worker(item)
+        .finally(() => {
+          executing.delete(p);
+          onSettled?.();
+        });
+      executing.add(p);
+      if (executing.size >= concurrency) {
+        await Promise.race(executing);
+      }
+    }
+    await Promise.all(executing);
+  } catch (e) {
+    // 失敗した worker は .finally で executing から外れているため、ここで待つのは
+    // 実行中の残りだけ。allSettled は追加の失敗でも reject しないので、
+    // 最初の例外をそのまま投げ直せる。
+    await Promise.allSettled(executing);
+    throw e;
+  }
+}
+
 async function main(argv: string[]) {
   const outDir = argv[2] || path.join(import.meta.dirname, '..', '..', 'out', 'api');
   fs.mkdirSync(outDir, { recursive: true });
@@ -239,19 +275,12 @@ async function main(argv: string[]) {
   });
   progress.start(machiAzas.length, 0);
   try {
-    const executing = new Set<Promise<void>>();
-    for (const ma of machiAzas) {
-      const p: Promise<void> = processCity(ma, machiAzaDataByCode, outDir)
-        .finally(() => {
-          executing.delete(p);
-          progress.increment();
-        });
-      executing.add(p);
-      if (executing.size >= CONCURRENCY) {
-        await Promise.race(executing);
-      }
-    }
-    await Promise.all(executing);
+    await runWithConcurrency(
+      machiAzas,
+      CONCURRENCY,
+      (ma) => processCity(ma, machiAzaDataByCode, outDir),
+      () => progress.increment(),
+    );
   } finally {
     progress.stop();
   }
