@@ -20,7 +20,7 @@ await test.describe('resolveConcurrency', async () => {
 
   await test('it falls back to the default for unset, empty, or non-numeric values', () => {
     assert.equal(resolveConcurrency(undefined), 4);
-    // 空文字列は ?? では拾われないため parseInt('') = NaN になる経路。
+    // 空文字列は ?? では拾われないため、/^\d+$/ に一致せず既定値へ落ちる経路。
     assert.equal(resolveConcurrency(''), 4);
     assert.equal(resolveConcurrency('abc'), 4);
   });
