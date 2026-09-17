@@ -53,8 +53,16 @@ jobs:
       # Node 22 同梱の npm は 10.9.x で、package.json の allowScripts を解釈しない。
       # npm 11 の engines は ^20.17.0 || >=22.9.0 で .tool-versions の 22.9.0 を満たすため、
       # Node は 22 のまま npm だけ上げる。npm 12 は Node 22.22.2 以降を要求するので上げない。
-      - name: npm を 11 系にする
-        run: npm i -g npm@11
+      #
+      # バージョンは完全固定する。範囲指定にすると実行時点の最新版が入り、
+      # この dist をそのまま publish ジョブが provenance 付きで公開するため、
+      # 同じタグから異なる成果物が出うる。
+      # 下げる場合は 11.16.0 以上を保つこと。--strict-allow-scripts は 11.16.0 で入った
+      # オプションで、それ未満の npm は未知のオプションとして黙って無視する（実測）。
+      # 11.5.1 まで下げると下の --strict-allow-scripts が無効化され、
+      # 未登録の install スクリプトが素通りする。
+      - name: npm を固定バージョンにする
+        run: npm i -g npm@11.19.1
 
       # --strict-allow-scripts は allowScripts 未登録の install スクリプトを
       # 実行せずに失敗させる。ここで作った dist はそのまま publish ジョブが公開するため、
