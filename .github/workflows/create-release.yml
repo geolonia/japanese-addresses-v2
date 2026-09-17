@@ -80,7 +80,9 @@ jobs:
           prerelease: ${{ needs.build.outputs.prerelease }}
 
   publish:
-    needs: build
+    # npm 公開は同一バージョンを再公開できず取り消しも現実的でない。
+    # 復旧可能な Release 作成を先に済ませ、不可逆な公開を最後に置く。
+    needs: [build, release]
 
     runs-on: ubuntu-latest
 
