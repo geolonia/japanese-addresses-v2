@@ -3,6 +3,10 @@
   "type": "module",
   "version": "0.0.5",
   "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geolonia/japanese-addresses-v2.git"
+  },
   "exports": {
     "import": "./dist/esm/data.mjs",
     "require": "./dist/cjs/data.cjs",
@@ -37,6 +41,11 @@
   "files": [
     "dist/**/*"
   ],
+  "allowScripts": {
+    "better-sqlite3": true,
+    "esbuild": true,
+    "fsevents": true
+  },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@geolonia/japanese-numeral": "^1.0.2",

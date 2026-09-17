@@ -6,6 +6,10 @@ on:
   #   - cron: '0 0 * * *'
   workflow_dispatch:
 
+# 既定は読み取りのみ。追加の権限が必要なジョブでだけ個別に宣言する
+permissions:
+  contents: read
+
 jobs:
   create-data:
     runs-on: ubuntu-latest
@@ -29,27 +33,34 @@ jobs:
           sudo df -h
           echo
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          # どのジョブも git 認証を使わないため、認証情報をワークツリーに残さない
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: 'npm'
 
       - name: Cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           key: 'v1'
           path: cache
 
+      # NOTE: このジョブは id-token: write を持つため ACTIONS_ID_TOKEN_REQUEST_* が全ステップに
+      # 露出しており、npm ci が走らせる better-sqlite3 などの install スクリプトから
+      # AWS ロールを引き受けられる状態にある。生成物 out/api が巨大でジョブ間の受け渡しが
+      # 現実的でないため分割していない。絞り込む場合は AWS ロールの信頼ポリシー側で行う。
       - name: Install dependencies
         run: npm ci
 
       - name: Create all data
         run: npm run run:all
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ap-northeast-1
@@ -74,7 +85,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          # どのジョブも git 認証を使わないため、認証情報をワークツリーに残さない
+          persist-credentials: false
 
       - name: Clear Cloudflare cache
         env:
