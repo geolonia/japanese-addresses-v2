@@ -50,8 +50,17 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      # Node 22 同梱の npm は 10.9.x で、package.json の allowScripts を解釈しない。
+      # npm 11 の engines は ^20.17.0 || >=22.9.0 で .tool-versions の 22.9.0 を満たすため、
+      # Node は 22 のまま npm だけ上げる。npm 12 は Node 22.22.2 以降を要求するので上げない。
+      - name: npm を 11 系にする
+        run: npm i -g npm@11
+
+      # --strict-allow-scripts は allowScripts 未登録の install スクリプトを
+      # 実行せずに失敗させる。ここで作った dist はそのまま publish ジョブが公開するため、
+      # 新しい install スクリプト持ちの依存が混入したらビルド段階で気付けるようにする。
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --strict-allow-scripts
 
       - name: Build
         run: npm run build
