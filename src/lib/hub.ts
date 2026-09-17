@@ -18,16 +18,20 @@ const HUB_GROUP_ID = '864dfb9be4ef483d864e886fa25e1c94';
 // 切り捨ての検知ができなくなる (実測で確認)。
 // 定義: https://dataset.address-br.digital.go.jp/api/search/definition/
 const HUB_MAX_LIMIT = 100;
-// 1クエリあたりの取得件数上限。
+// 1ページあたりの希望取得件数。
 //
 // 検索クエリはスペース区切りの語として扱われるため、都道府県名と同名の市
 // (長野県長野市など) では県内の全市区町村がマッチして件数が膨らむ。
-// この上限を超える分は startindex のページ追随 (fetchAllSearchPages) で取得する。
+// これを超える分は startindex のページ追随 (fetchAllSearchPages) で取得するので、
+// 「1クエリで取り切る件数」ではなく「1往復でまとめて取る件数」を決める値。
+const SEARCH_PAGE_SIZE = 100;
+// 実際に limit として送る値。希望値 (SEARCH_PAGE_SIZE) を API の上限 (HUB_MAX_LIMIT) で
+// 頭打ちにする。現時点では両者が同値だが、決めている事柄が違うので定数を分けてある。
 //
 // 「HUB_MAX_LIMIT 以下にすること」という約束はコメントではなく Math.min で担保する。
 // 超過すると numberMatched が消えて切り捨ての検知が効かなくなるため、
-// 将来この値を引き上げても API の上限で頭打ちになるようにしておく。
-const SEARCH_RESULT_LIMIT = Math.min(100, HUB_MAX_LIMIT);
+// 将来 SEARCH_PAGE_SIZE を引き上げても API の上限で頭打ちになるようにしておく。
+const SEARCH_RESULT_LIMIT = Math.min(SEARCH_PAGE_SIZE, HUB_MAX_LIMIT);
 
 // 1クエリで辿る最大ページ数。API 側の異常で numberMatched が過大に返り続けた場合の
 // 暴走防止。10ページ = 1000件で、実測の最大は153件 (長野県長野市, 2026-08-09)。
@@ -196,6 +200,23 @@ async function fetchSearchPage(url: string): Promise<HubSearchResultList> {
   const json = await fetchHubJson<HubSearchResultList>(url);
   if (!Array.isArray(json.features)) {
     throw new Error(`HUB API returned an unexpected search response (features is not an array): ${url}`);
+  }
+  // features の要素も同じ粒度で検査する。fetchAllSearchPages は properties.id で重複排除
+  // するため、properties を欠く feature が1件でも混ざるとページ追随の内部から裸の
+  // TypeError が飛ぶ。また id が undefined の feature が複数あると、それらが同一 id と
+  // みなされて1件に潰れ、件数だけが静かに減る。
+  for (const [index, feature] of json.features.entries()) {
+    // GeoJSON.Feature の properties が any なので、そのまま束縛すると any が伝播する。
+    // unknown で受けて typeof の絞り込みで string を確定させる。
+    const id: unknown = feature?.properties?.id;
+    // 空文字・空白のみも弾く。型が string でも中身が区別不能なら undefined と同じ結果に
+    // なるため、片方だけ塞いでも検査にならない。
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      throw new Error(
+        `HUB API returned an unexpected search response `
+        + `(features[${index}].properties.id is not a non-empty string): ${url}`
+      );
+    }
   }
   return json;
 }
